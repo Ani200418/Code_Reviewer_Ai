@@ -167,3 +167,4 @@ Full-Stack Developer
    - `server/.env` → `GOOGLE_CLIENT_ID=<your-client-id>`
    - `client/.env.local` → `NEXT_PUBLIC_GOOGLE_CLIENT_ID=<your-client-id>`
 7. Run `npm install` in the `server/` folder to install `google-auth-library`
+# Code_Reviewer_Ai
