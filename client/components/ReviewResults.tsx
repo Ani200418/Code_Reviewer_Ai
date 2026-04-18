@@ -1,0 +1,213 @@
+'use client';
+
+import { useState } from 'react';
+import {
+  RiBugLine, RiLightbulbLine, RiInformationLine,
+  RiTestTubeLine, RiAlertLine, RiFileCopyLine, RiCheckLine,
+} from 'react-icons/ri';
+import { AIResponse } from '@/lib/services';
+import ScoreDisplay from './ScoreDisplay';
+
+interface ReviewResultsProps {
+  result: AIResponse;
+  processingTime?: number;
+}
+
+const SectionCard = ({
+  title, icon, count, color, children, defaultOpen = true,
+}: {
+  title: string; icon: React.ReactNode; count?: number;
+  color: string; children: React.ReactNode; defaultOpen?: boolean;
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="card overflow-hidden">
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-surface-700/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className={color}>{icon}</span>
+          <span className="font-semibold text-slate-200">{title}</span>
+          {count !== undefined && (
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              count === 0
+                ? 'bg-surface-600 text-slate-500'
+                : 'bg-sky-500/15 text-sky-400'
+            }`}>
+              {count}
+            </span>
+          )}
+        </div>
+        <span className={`text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t border-[rgba(56,189,248,0.08)] p-5 animate-fade-in">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CopyButton = ({ text }: { text: string }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 rounded hover:bg-surface-600 text-slate-500 hover:text-slate-300 transition-colors"
+      title="Copy"
+    >
+      {copied ? <RiCheckLine size={14} className="text-green-400" /> : <RiFileCopyLine size={14} />}
+    </button>
+  );
+};
+
+export default function ReviewResults({ result, processingTime }: ReviewResultsProps) {
+  return (
+    <div className="space-y-4">
+      {/* Processing time badge */}
+      {processingTime && (
+        <div className="flex justify-end">
+          <span className="text-xs text-slate-500">
+            Analysis completed in {(processingTime / 1000).toFixed(1)}s
+          </span>
+        </div>
+      )}
+
+      {/* Score */}
+      <ScoreDisplay score={result.score} />
+
+      {/* Explanation */}
+      <SectionCard
+        title="Code Explanation"
+        icon={<RiInformationLine size={20} />}
+        color="text-sky-400"
+      >
+        <p className="text-slate-300 leading-relaxed text-sm">{result.explanation}</p>
+      </SectionCard>
+
+      {/* Bugs */}
+      <SectionCard
+        title="Bugs Detected"
+        icon={<RiBugLine size={20} />}
+        color="text-red-400"
+        count={result.bugs.length}
+      >
+        {result.bugs.length === 0 ? (
+          <div className="flex items-center gap-2 text-green-400 text-sm">
+            <RiCheckLine size={16} />
+            <span>No bugs detected. Great job!</span>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {result.bugs.map((bug, i) => (
+              <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+                <div className="flex items-start gap-2 mb-2">
+                  <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <p className="text-red-300 font-medium text-sm">{bug.issue}</p>
+                </div>
+                <p className="text-slate-400 text-sm leading-relaxed pl-7">{bug.explanation}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Optimizations */}
+      <SectionCard
+        title="Optimization Suggestions"
+        icon={<RiLightbulbLine size={20} />}
+        color="text-amber-400"
+        count={result.optimizations.length}
+      >
+        {result.optimizations.length === 0 ? (
+          <p className="text-slate-400 text-sm">No major optimizations needed.</p>
+        ) : (
+          <div className="space-y-4">
+            {result.optimizations.map((opt, i) => (
+              <div key={i} className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
+                <p className="text-amber-300 font-medium text-sm mb-2">{opt.suggestion}</p>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="text-xs text-slate-500">Impact:</span>
+                  <span className="text-xs text-slate-400">{opt.impact}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Edge Cases */}
+      <SectionCard
+        title="Edge Cases"
+        icon={<RiAlertLine size={20} />}
+        color="text-orange-400"
+        count={result.edge_cases.length}
+        defaultOpen={false}
+      >
+        {result.edge_cases.length === 0 ? (
+          <p className="text-slate-400 text-sm">No notable edge cases identified.</p>
+        ) : (
+          <ul className="space-y-2">
+            {result.edge_cases.map((ec, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm text-slate-300">
+                <RiAlertLine size={14} className="text-orange-400 flex-shrink-0 mt-0.5" />
+                {ec}
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+
+      {/* Test Cases */}
+      <SectionCard
+        title="Test Cases"
+        icon={<RiTestTubeLine size={20} />}
+        color="text-violet-400"
+        count={result.test_cases.length}
+        defaultOpen={false}
+      >
+        {result.test_cases.length === 0 ? (
+          <p className="text-slate-400 text-sm">No test cases generated.</p>
+        ) : (
+          <div className="space-y-3">
+            {result.test_cases.map((tc, i) => (
+              <div key={i} className="bg-violet-500/5 border border-violet-500/20 rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-violet-500/15">
+                  <span className="text-xs font-semibold text-violet-400">Test Case {i + 1}</span>
+                  <CopyButton text={`Input: ${tc.input}\nExpected: ${tc.expected_output}`} />
+                </div>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Input</p>
+                    <code className="text-xs text-slate-300 font-mono bg-surface-700 px-2 py-1 rounded block whitespace-pre-wrap">
+                      {tc.input}
+                    </code>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider">Expected Output</p>
+                    <code className="text-xs text-green-400 font-mono bg-green-500/10 px-2 py-1 rounded block whitespace-pre-wrap">
+                      {tc.expected_output}
+                    </code>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+    </div>
+  );
+}

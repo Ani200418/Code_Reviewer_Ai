@@ -1,0 +1,21 @@
+{
+  "name": "ai-code-reviewer",
+  "version": "1.0.0",
+  "description": "AI-powered SaaS code review platform",
+  "private": true,
+ "scripts": {
+  "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+  "dev:server": "cd server && npm run dev",
+  "dev:client": "cd client && npm run dev",
+  "install:all": "cd server && npm install && cd ../client && npm install",
+  "build:client": "cd client && npm run build",
+  "start:server": "cd server && npm start",
+  "start:client": "cd client && npm start"
+},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
