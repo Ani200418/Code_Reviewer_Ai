@@ -4,6 +4,7 @@
  */
 
 const OpenAI = require('openai');
+const { removeComments } = require('./codeExecutor');
 
 let openaiClient = null;
 
@@ -49,6 +50,19 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   const client = getClient();
   const model = process.env.OPENAI_MODEL || 'gpt-4o';
 
+  // Clean comments before analysis to prevent parsing errors
+  let cleanedCode = code;
+  try {
+    cleanedCode = removeComments(code, language);
+    if (!cleanedCode) {
+      // If code is only comments, use original code
+      cleanedCode = code;
+    }
+  } catch (err) {
+    console.warn('Comment removal failed, using original code:', err.message);
+    cleanedCode = code;
+  }
+
   let rawContent = '';
 
   try {
@@ -59,7 +73,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildPrompt(code, language, targetLanguage) },
+            { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
       ],
     });
 
@@ -85,7 +99,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildPrompt(code, language, targetLanguage) },
+            { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
           ],
         });
         rawContent = groqResponse.choices[0]?.message?.content?.trim() || '';
@@ -116,7 +130,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
       
       try {
         const result = await geminiModel.generateContent({
-          contents: [{ role: 'user', parts: [{ text: buildPrompt(code, language, targetLanguage) }] }],
+          contents: [{ role: 'user', parts: [{ text: buildPrompt(cleanedCode, language, targetLanguage) }] }],
           generationConfig: {
             maxOutputTokens: 8192,
             temperature: 0.2,

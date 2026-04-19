@@ -22,6 +22,12 @@ export interface TestCase {
   expected_output: string;
 }
 
+export interface ExecutionOutput {
+  output: string;
+  error: string | null;
+  success: boolean;
+}
+
 export interface Score {
   overall: number;
   readability: number;
@@ -42,6 +48,8 @@ export interface ReviewResult {
   reviewId: string;
   language: string;
   fileName?: string;
+  userInput?: string;
+  executionOutput?: ExecutionOutput;
   aiResponse: AIResponse;
   score: number;
   processingTime: number;
@@ -84,19 +92,22 @@ export const reviewService = {
   /**
    * Submit code text for AI analysis
    */
-  reviewCode: async (code: string, language: string, targetLanguage?: string, fileName?: string): Promise<ReviewResult> => {
-    const res = await api.post('/review-code', { code, language, targetLanguage, fileName });
+  reviewCode: async (code: string, language: string, targetLanguage?: string, fileName?: string, userInput?: string): Promise<ReviewResult> => {
+    const res = await api.post('/review-code', { code, language, targetLanguage, fileName, userInput });
     return res.data.data;
   },
 
   /**
    * Upload a code file for AI analysis
    */
-  uploadCodeFile: async (file: File, targetLanguage?: string): Promise<ReviewResult> => {
+  uploadCodeFile: async (file: File, targetLanguage?: string, userInput?: string): Promise<ReviewResult> => {
     const formData = new FormData();
     formData.append('file', file);
     if (targetLanguage) {
       formData.append('targetLanguage', targetLanguage);
+    }
+    if (userInput) {
+      formData.append('userInput', userInput);
     }
     const res = await api.post('/upload-code', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

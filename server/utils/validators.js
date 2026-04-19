@@ -70,6 +70,9 @@ const reviewCodeSchema = Joi.object({
     }),
   fileName: Joi.string().trim().max(255).optional().allow('', null),
   targetLanguage: Joi.string().trim().lowercase().valid(...SUPPORTED_LANGUAGES).optional().allow('', null),
+  userInput: Joi.string().max(10000).optional().allow('', null).messages({
+    'string.max': 'User input cannot exceed 10,000 characters',
+  }),
 });
 
 module.exports = { signupSchema, loginSchema, reviewCodeSchema };

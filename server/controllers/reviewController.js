@@ -6,6 +6,7 @@
 const path      = require('path');
 const Review    = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
+const { executeCode } = require('../utils/codeExecutor');
 const { reviewCodeSchema } = require('../utils/validators');
 
 const SUPPORTED_LANGUAGES = ['javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'other'];
@@ -46,10 +47,14 @@ const reviewCode = async (req, res, next) => {
       });
     }
 
-    const { code, language, fileName, targetLanguage } = req.body;
+    const { code, language, fileName, targetLanguage, userInput = '' } = req.body;
     const start = Date.now();
 
-    const aiResponse    = await analyzeCode(code, language, targetLanguage);
+    // Execute code to get actual output
+    const executionResult = executeCode(code, language, userInput);
+    
+    // Analyze code with AI
+    const aiResponse = await analyzeCode(code, language, targetLanguage);
     const processingTime = Date.now() - start;
 
     const review = await Review.create({
@@ -57,6 +62,12 @@ const reviewCode = async (req, res, next) => {
       code,
       language,
       fileName:     fileName || null,
+      userInput:    userInput || '',
+      executionOutput: {
+        output: executionResult.output || '',
+        error: executionResult.error || null,
+        success: executionResult.success || false,
+      },
       aiResponse,
       score:        aiResponse.score.overall,
       processingTime,
@@ -65,13 +76,15 @@ const reviewCode = async (req, res, next) => {
     res.status(201).json({
       success: true,
       data: {
-        reviewId:      review._id,
-        language:      review.language,
-        fileName:      review.fileName,
-        aiResponse:    review.aiResponse,
-        score:         review.score,
-        processingTime: review.processingTime,
-        createdAt:     review.createdAt,
+        reviewId:           review._id,
+        language:           review.language,
+        fileName:           review.fileName,
+        userInput:          review.userInput,
+        executionOutput:    review.executionOutput,
+        aiResponse:         review.aiResponse,
+        score:              review.score,
+        processingTime:     review.processingTime,
+        createdAt:          review.createdAt,
       },
     });
   } catch (err) {
@@ -100,6 +113,11 @@ const uploadCode = async (req, res, next) => {
     }
 
     const start      = Date.now();
+    
+    // Execute code to get actual output
+    const executionResult = executeCode(code, language, req.body.userInput || '');
+    
+    // Analyze code with AI
     const aiResponse = await analyzeCode(code, language, req.body.targetLanguage);
     const processingTime = Date.now() - start;
 
@@ -108,6 +126,12 @@ const uploadCode = async (req, res, next) => {
       code,
       language,
       fileName,
+      userInput: req.body.userInput || '',
+      executionOutput: {
+        output: executionResult.output || '',
+        error: executionResult.error || null,
+        success: executionResult.success || false,
+      },
       aiResponse,
       score:    aiResponse.score.overall,
       processingTime,
@@ -116,13 +140,15 @@ const uploadCode = async (req, res, next) => {
     res.status(201).json({
       success: true,
       data: {
-        reviewId:      review._id,
-        language:      review.language,
-        fileName:      review.fileName,
-        aiResponse:    review.aiResponse,
-        score:         review.score,
-        processingTime: review.processingTime,
-        createdAt:     review.createdAt,
+        reviewId:           review._id,
+        language:           review.language,
+        fileName:           review.fileName,
+        userInput:          review.userInput,
+        executionOutput:    review.executionOutput,
+        aiResponse:         review.aiResponse,
+        score:              review.score,
+        processingTime:     review.processingTime,
+        createdAt:          review.createdAt,
       },
     });
   } catch (err) {

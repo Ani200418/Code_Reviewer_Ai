@@ -8,6 +8,7 @@ import { LANGUAGE_OPTIONS, LanguageValue, extractErrorMessage } from '@/lib/util
 import CodeEditor from '@/components/CodeEditor';
 import ReviewCard from '@/components/ReviewCard';
 import FileUpload from '@/components/FileUpload';
+import CodeInput from '@/components/CodeInput';
 import ShareModal from '@/components/ShareModal';
 import Loader from '@/components/Loader';
 
@@ -77,6 +78,7 @@ export default function ReviewPage() {
   const [language, setLanguage] = useState<LanguageValue>('javascript');
   const [targetLanguage, setTargetLanguage] = useState<LanguageValue | ''>('');
   const [code, setCode] = useState(SAMPLE.javascript);
+  const [userInput, setUserInput] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ReviewResult | null>(null);
@@ -101,8 +103,8 @@ export default function ReviewPage() {
     setResult(null);
     try {
       const res = tab === 'upload' && uploadedFile
-        ? await reviewService.uploadCodeFile(uploadedFile, targetLanguage || undefined)
-        : await reviewService.reviewCode(code, language, targetLanguage || undefined);
+        ? await reviewService.uploadCodeFile(uploadedFile, targetLanguage || undefined, userInput || undefined)
+        : await reviewService.reviewCode(code, language, targetLanguage || undefined, undefined, userInput || undefined);
       setResult(res);
       toast.success('Analysis complete!');
       setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
@@ -111,7 +113,7 @@ export default function ReviewPage() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [tab, code, language, uploadedFile, targetLanguage]);
+  }, [tab, code, language, uploadedFile, targetLanguage, userInput]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -183,6 +185,13 @@ export default function ReviewPage() {
             />
           )}
 
+          {/* Code Input (Optional) */}
+          <CodeInput
+            value={userInput}
+            onChange={setUserInput}
+            disabled={isAnalyzing}
+          />
+
           {/* Submit */}
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-2">
@@ -229,7 +238,11 @@ export default function ReviewPage() {
               </button>
             </div>
           </div>
-          <ReviewCard result={result.aiResponse} processingTime={result.processingTime} />
+          <ReviewCard 
+            result={result.aiResponse} 
+            processingTime={result.processingTime}
+            executionOutput={result.executionOutput}
+          />
         </div>
       )}
 

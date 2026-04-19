@@ -13,6 +13,7 @@ interface ReviewCardProps {
   result: AIResponse;
   processingTime?: number;
   animate?: boolean;
+  executionOutput?: { output: string; error: string | null; success: boolean };
 }
 
 /* ─── Collapsible section ─────────────────────────────────────────── */
@@ -105,7 +106,12 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
 
 /* ─── Main component ──────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function ReviewCard({ result, processingTime, animate = true }: ReviewCardProps) {
+export default function ReviewCard({
+  result,
+  processingTime,
+  animate = true,
+  executionOutput,
+}: ReviewCardProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { score, bugs, optimizations, explanation, edge_cases, test_cases, converted_code } = result as any;
 
@@ -287,13 +293,35 @@ export default function ReviewCard({ result, processingTime, animate = true }: R
 
       {/* ── Test Cases ── */}
       <Section
-        title="Test Cases"
+        title="Test Cases & Execution"
         icon={<RiTestTubeLine size={16} />}
         color="#a78bfa"
         bg="rgba(139,92,246,0.12)"
         count={test_cases.length}
         defaultOpen={false}
       >
+        {/* Show actual execution output if available */}
+        {executionOutput && (
+          <div className="mb-4 pb-4 border-b border-slate-700">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Actual Output (Executed)</p>
+                <code
+                  className="block text-xs font-mono p-3 rounded-lg whitespace-pre-wrap break-all max-h-32 overflow-y-auto"
+                  style={{
+                    background: executionOutput.error && !executionOutput.success ? 'rgba(239,68,68,0.05)' : 'rgba(16,185,129,0.05)',
+                    border: `1px solid ${executionOutput.error && !executionOutput.success ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)'}`,
+                    color: executionOutput.error && !executionOutput.success ? '#fca5a5' : '#86efac',
+                  }}
+                >
+                  {executionOutput.error && !executionOutput.success ? executionOutput.error : executionOutput.output || '(No output)'}
+                </code>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Generated test cases */}
         {test_cases.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)] py-2">No test cases generated.</p>
         ) : (
