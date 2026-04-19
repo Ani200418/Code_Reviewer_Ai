@@ -2,12 +2,33 @@
  * Code Execution Utility
  * Safely executes user code in a sandboxed environment and captures output
  * Supports JavaScript natively; other languages return "not supported" message
+ * Includes UTF-8 validation and encoding error handling
  */
 
 const vm = require('vm');
 const { execSync } = require('child_process');
 
-// ─── Helper: Clean code by removing comments ──────────────────────────────────
+// ─── Helper: Validate UTF-8 encoding ──────────────────────────────────────────
+
+const validateUTF8 = (buffer) => {
+  try {
+    const str = buffer.toString('utf8');
+    // Verify by converting back
+    const reencoded = Buffer.from(str, 'utf8');
+    if (reencoded.toString('utf8') !== str) {
+      throw new Error('Invalid UTF-8 sequence detected');
+    }
+    return { valid: true, content: str, error: null };
+  } catch (err) {
+    return {
+      valid: false,
+      content: null,
+      error: `UTF-8 Encoding Error: ${err.message}`,
+    };
+  }
+};
+
+// ─── Helper: Clean code by removing comments safely ────────────────────────────
 
 const removeComments = (code, language) => {
   let cleaned = code;
@@ -17,14 +38,21 @@ const removeComments = (code, language) => {
     cleaned = cleaned.replace(/\/\/.*$/gm, '');
     // Remove multi-line comments (/* ... */)
     cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Remove trailing whitespace on each line
+    cleaned = cleaned.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
   } else if (language === 'python') {
     // Remove single-line comments (#)
     cleaned = cleaned.replace(/#.*$/gm, '');
-    // Remove multi-line strings (""" or ''')
+    // Remove docstrings (""" or ''')
     cleaned = cleaned.replace(/'''[\s\S]*?'''/g, '');
     cleaned = cleaned.replace(/"""[\s\S]*?"""/g, '');
+    // Remove trailing whitespace
+    cleaned = cleaned.split('\n').map(line => line.replace(/\s+$/, '')).join('\n');
   }
 
+  // Remove multiple blank lines, keep single
+  cleaned = cleaned.replace(/\n\n\n+/g, '\n\n');
+  
   return cleaned.trim();
 };
 
@@ -223,4 +251,4 @@ const executeCode = (code, language = 'javascript', userInput = '') => {
   }
 };
 
-module.exports = { executeCode, removeComments };
+module.exports = { executeCode, removeComments, validateUTF8 };
