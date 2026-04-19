@@ -43,7 +43,7 @@ REQUIRED JSON SCHEMA (ALL fields mandatory):
       "impact": "positive impact of change"
     }
   ],
-  "optimized_code": "COMPLETE refactored code with ALL improvements applied. Must be fully functional and ready to use.",
+  "optimized_code": "COMPLETE refactored code with ALL improvements applied. Must include: better naming, proper error handling, performance optimizations, security fixes, readable structure. Must be fully functional and ready to use.",
   "explanation": "3-4 sentence summary of code purpose and overall assessment",
   "edge_cases": ["edge case 1", "edge case 2"],
   "test_cases": [
@@ -62,19 +62,26 @@ REQUIRED JSON SCHEMA (ALL fields mandatory):
   "converted_code": "if translation requested, translated version; otherwise empty string"
 }
 
-CRITICAL RULES:
-1. OPTIMIZED_CODE is MANDATORY - must always include a complete refactored version
-2. Include ALL improvements in optimized_code (not just suggestions)
-3. Keep original functionality while improving quality
-4. Use modern language features and best practices
-5. Include proper error handling and edge case handling in optimized code
-6. If code is already excellent, still provide an optimized version with minor enhancements
-7. Scoring guidelines:
-   - 90-100: Excellent, minimal improvements needed
-   - 70-89: Good, some improvements recommended
-   - 50-69: Average, significant improvements needed
-   - 30-49: Poor, major refactoring required
-   - 0-29: Critical, extensive rewrite necessary
+CRITICAL RULES FOR optimized_code FIELD:
+1. ALWAYS include a complete optimized version - NEVER leave this empty
+2. Apply ALL identified improvements to the optimized code
+3. If no issues found, still improve code with enhancements like:
+   - Better variable/function naming
+   - Added error handling
+   - Performance optimizations
+   - Better code structure
+   - Documentation/comments
+4. Keep original functionality while improving code quality
+5. Use modern language features and best practices
+6. Code must be fully tested and production-ready
+7. Include proper input validation and edge case handling
+
+SCORING GUIDELINES:
+- 90-100: Excellent, minimal improvements needed
+- 70-89: Good, some improvements recommended
+- 50-69: Average, significant improvements needed
+- 30-49: Poor, major refactoring required
+- 0-29: Critical, extensive rewrite necessary
 
 RESPONSE FORMAT: Return ONLY the JSON object. NO additional text.`;
 
@@ -228,21 +235,38 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
 
 const sanitizeResponse = (raw) => {
   const clamp = (n) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
-  const str = (v) => String(v || '').slice(0, 1000);
+  const str = (v) => String(v || '').slice(0, 5000);  // Increased for larger code blocks
+  const largeStr = (v) => String(v || '');  // No limit for optimized_code
 
   return {
-    bugs: Array.isArray(raw.bugs)
-      ? raw.bugs.slice(0, 10).map((b) => ({ issue: str(b.issue), explanation: str(b.explanation) }))
+    issues: Array.isArray(raw.issues)
+      ? raw.issues.slice(0, 15).map((i) => ({
+          severity: String(i.severity || 'medium').toLowerCase(),
+          type: String(i.type || 'bug').toLowerCase(),
+          description: str(i.description),
+          line: str(i.line),
+          suggestion: str(i.suggestion),
+        }))
       : [],
-    optimizations: Array.isArray(raw.optimizations)
-      ? raw.optimizations.slice(0, 10).map((o) => ({ suggestion: str(o.suggestion), impact: str(o.impact) }))
+    improvements: Array.isArray(raw.improvements)
+      ? raw.improvements.slice(0, 15).map((imp) => ({
+          area: String(imp.area || 'readability').toLowerCase(),
+          current: str(imp.current),
+          suggested: str(imp.suggested),
+          impact: str(imp.impact),
+        }))
       : [],
+    optimized_code: largeStr(raw.optimized_code),  // MANDATORY - Must always be present
     explanation: str(raw.explanation),
     edge_cases: Array.isArray(raw.edge_cases)
-      ? raw.edge_cases.slice(0, 8).map(str)
+      ? raw.edge_cases.slice(0, 10).map(str)
       : [],
     test_cases: Array.isArray(raw.test_cases)
-      ? raw.test_cases.slice(0, 8).map((t) => ({ input: str(t.input), expected_output: str(t.expected_output) }))
+      ? raw.test_cases.slice(0, 10).map((t) => ({
+          description: str(t.description),
+          input: str(t.input),
+          expected_output: str(t.expected_output),
+        }))
       : [],
     score: {
       overall:       clamp(raw.score?.overall),
@@ -250,7 +274,7 @@ const sanitizeResponse = (raw) => {
       efficiency:    clamp(raw.score?.efficiency),
       best_practices: clamp(raw.score?.best_practices),
     },
-    converted_code: String(raw.converted_code || ''),
+    converted_code: largeStr(raw.converted_code),
   };
 };
 
