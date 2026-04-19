@@ -7,25 +7,25 @@ import api from './api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface Bug {
-  issue: string;
-  explanation: string;
+export interface Issue {
+  severity: 'high' | 'medium' | 'low';
+  type: 'bug' | 'performance' | 'security' | 'style';
+  description: string;
+  line: string;
+  suggestion: string;
 }
 
-export interface Optimization {
-  suggestion: string;
+export interface Improvement {
+  area: 'readability' | 'efficiency' | 'maintainability' | 'best_practices';
+  current: string;
+  suggested: string;
   impact: string;
 }
 
 export interface TestCase {
+  description: string;
   input: string;
   expected_output: string;
-}
-
-export interface ExecutionOutput {
-  output: string;
-  error: string | null;
-  success: boolean;
 }
 
 export interface Score {
@@ -36,13 +36,13 @@ export interface Score {
 }
 
 export interface AIResponse {
-  bugs: Bug[];
-  optimizations: Optimization[];
+  issues: Issue[];
+  improvements: Improvement[];
   explanation: string;
   edge_cases: string[];
   test_cases: TestCase[];
-  optimized_code?: string;
-  converted_code?: string;
+  optimized_code: string;
+  converted_code: string;
   score: Score;
 }
 

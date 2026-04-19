@@ -115,7 +115,7 @@ export default function ReviewCard({
   currentOutput,
 }: ReviewCardProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { score, bugs, optimizations, explanation, edge_cases, test_cases, converted_code } = result as any;
+  const { score, issues, improvements, explanation, edge_cases, test_cases, optimized_code, converted_code } = result as any;
 
   return (
     <div className={`space-y-4 ${animate ? 'animate-slide-up' : ''}`}>
@@ -233,7 +233,7 @@ export default function ReviewCard({
       )}
 
       {/* ── Optimized Code ── */}
-      {result.optimized_code && (
+      {optimized_code && (
         <Section
           title="Optimized Code"
           icon={<RiCodeSSlashLine size={16} />}
@@ -243,11 +243,11 @@ export default function ReviewCard({
           <div className="rounded-xl overflow-hidden border border-slate-700/50">
             <div className="flex items-center justify-between px-4 py-2 bg-slate-800/50 border-b border-slate-700/50">
               <span className="text-xs font-bold text-violet-400">Improved Version</span>
-              <CopyBtn text={result.optimized_code} />
+              <CopyBtn text={optimized_code} />
             </div>
             <div className="p-4 bg-[#0d1117] overflow-x-auto">
               <code className="text-sm font-mono text-slate-300 whitespace-pre">
-                {result.optimized_code}
+                {optimized_code}
               </code>
             </div>
           </div>
@@ -264,69 +264,88 @@ export default function ReviewCard({
         <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{explanation}</p>
       </Section>
 
-      {/* ── Bugs ── */}
+      {/* ── Issues ── */}
       <Section
-        title="Bugs Detected"
+        title="Issues Found"
         icon={<RiBugLine size={16} />}
         color="#f87171"
         bg="rgba(239,68,68,0.12)"
-        count={bugs.length}
+        count={issues?.length || 0}
       >
-        {bugs.length === 0 ? (
+        {!issues || issues.length === 0 ? (
           <div className="flex items-center gap-2 py-2">
             <div className="w-7 h-7 rounded-full bg-green-500/15 flex items-center justify-center">
               <RiCheckLine size={14} className="text-green-400" />
             </div>
-            <p className="text-sm text-green-400 font-medium">No bugs detected — clean code!</p>
+            <p className="text-sm text-green-400 font-medium">No issues detected — excellent code!</p>
           </div>
         ) : (
           <div className="space-y-3">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {bugs.map((bug: any, i: number) => (
+            {issues.map((issue: any, i: number) => (
               <div
                 key={i}
                 className="rounded-xl p-4"
                 style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)' }}
               >
-                <div className="flex items-start gap-2.5 mb-2">
-                  <span
-                    className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171' }}
-                  >
-                    {i + 1}
-                  </span>
-                  <p className="text-sm font-semibold text-red-300">{bug.issue}</p>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start gap-2.5">
+                    <span
+                      className="px-2 py-0.5 rounded text-xs font-bold flex-shrink-0 mt-0.5"
+                      style={{ 
+                        background: issue.severity === 'high' ? 'rgba(239,68,68,0.2)' : issue.severity === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(56,189,248,0.2)',
+                        color: issue.severity === 'high' ? '#f87171' : issue.severity === 'medium' ? '#fbbf24' : '#38bdf8'
+                      }}
+                    >
+                      {issue.severity.toUpperCase()}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-red-300">{issue.description}</p>
+                      <p className="text-xs text-slate-400 mt-1">Type: {issue.type}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed pl-7">{bug.explanation}</p>
+                <div className="pl-10">
+                  <p className="text-xs font-semibold text-slate-400 mb-1">Fix:</p>
+                  <p className="text-sm text-[var(--text-secondary)]">{issue.suggestion}</p>
+                </div>
               </div>
             ))}
           </div>
         )}
       </Section>
 
-      {/* ── Optimizations ── */}
+      {/* ── Improvements ── */}
       <Section
-        title="Optimization Suggestions"
+        title="Improvement Suggestions"
         icon={<RiLightbulbLine size={16} />}
         color="#fbbf24"
         bg="rgba(245,158,11,0.12)"
-        count={optimizations.length}
+        count={improvements?.length || 0}
       >
-        {optimizations.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)] py-2">No major optimizations needed.</p>
+        {!improvements || improvements.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)] py-2">Code is already well-optimized.</p>
         ) : (
           <div className="space-y-3">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {optimizations.map((opt: any, i: number) => (
+            {improvements.map((imp: any, i: number) => (
               <div
                 key={i}
                 className="rounded-xl p-4"
                 style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}
               >
-                <p className="text-sm font-semibold text-amber-300 mb-2">{opt.suggestion}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium text-[var(--text-muted)]">Impact:</span>
-                  <span className="text-xs text-[var(--text-secondary)]">{opt.impact}</span>
+                <p className="text-sm font-semibold text-amber-300 mb-2">
+                  {imp.area.charAt(0).toUpperCase() + imp.area.slice(1)}: {imp.suggested}
+                </p>
+                <div className="space-y-1.5 text-xs">
+                  <div>
+                    <span className="text-slate-400">Current:</span>
+                    <p className="text-slate-300 mt-0.5">{imp.current}</p>
+                  </div>
+                  <div>
+                    <span className="text-amber-400 font-medium">Impact:</span>
+                    <p className="text-slate-300">{imp.impact}</p>
+                  </div>
                 </div>
               </div>
             ))}

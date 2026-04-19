@@ -96,52 +96,74 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
         <p className="text-slate-300 leading-relaxed text-sm">{result.explanation}</p>
       </SectionCard>
 
-      {/* Bugs */}
+      {/* Issues */}
       <SectionCard
-        title="Bugs Detected"
+        title="Issues Found"
         icon={<RiBugLine size={20} />}
         color="text-red-400"
-        count={result.bugs.length}
+        count={result.issues?.length || 0}
       >
-        {result.bugs.length === 0 ? (
+        {!result.issues || result.issues.length === 0 ? (
           <div className="flex items-center gap-2 text-green-400 text-sm">
             <RiCheckLine size={16} />
-            <span>No bugs detected. Great job!</span>
+            <span>No issues found. Excellent code!</span>
           </div>
         ) : (
           <div className="space-y-4">
-            {result.bugs.map((bug, i) => (
+            {result.issues.map((issue: any, i: number) => (
               <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
-                <div className="flex items-start gap-2 mb-2">
-                  <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
-                    {i + 1}
-                  </span>
-                  <p className="text-red-300 font-medium text-sm">{bug.issue}</p>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start gap-2">
+                    <span 
+                      className="px-2 py-0.5 rounded text-xs font-bold flex-shrink-0"
+                      style={{ 
+                        background: issue.severity === 'high' ? 'rgba(239,68,68,0.2)' : issue.severity === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(56,189,248,0.2)',
+                        color: issue.severity === 'high' ? '#f87171' : issue.severity === 'medium' ? '#fbbf24' : '#38bdf8'
+                      }}
+                    >
+                      {issue.severity.toUpperCase()}
+                    </span>
+                    <div>
+                      <p className="text-red-300 font-medium text-sm">{issue.description}</p>
+                      <p className="text-xs text-slate-500 mt-1">Type: {issue.type}</p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-slate-400 text-sm leading-relaxed pl-7">{bug.explanation}</p>
+                <div className="mt-2 pl-2">
+                  <p className="text-xs text-slate-500 font-semibold mb-1">Fix:</p>
+                  <p className="text-slate-400 text-sm">{issue.suggestion}</p>
+                </div>
               </div>
             ))}
           </div>
         )}
       </SectionCard>
 
-      {/* Optimizations */}
+      {/* Improvements */}
       <SectionCard
-        title="Optimization Suggestions"
+        title="Improvement Suggestions"
         icon={<RiLightbulbLine size={20} />}
         color="text-amber-400"
-        count={result.optimizations.length}
+        count={result.improvements?.length || 0}
       >
-        {result.optimizations.length === 0 ? (
-          <p className="text-slate-400 text-sm">No major optimizations needed.</p>
+        {!result.improvements || result.improvements.length === 0 ? (
+          <p className="text-slate-400 text-sm">Code is already well-optimized.</p>
         ) : (
           <div className="space-y-4">
-            {result.optimizations.map((opt, i) => (
+            {result.improvements.map((imp: any, i: number) => (
               <div key={i} className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
-                <p className="text-amber-300 font-medium text-sm mb-2">{opt.suggestion}</p>
-                <div className="flex items-center gap-1.5 mt-2">
-                  <span className="text-xs text-slate-500">Impact:</span>
-                  <span className="text-xs text-slate-400">{opt.impact}</span>
+                <p className="text-amber-300 font-medium text-sm mb-2">
+                  {imp.area}: {imp.suggested}
+                </p>
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <span className="text-slate-500">Current approach:</span>
+                    <p className="text-slate-400 mt-0.5">{imp.current}</p>
+                  </div>
+                  <div>
+                    <span className="text-amber-400 font-semibold">Impact:</span>
+                    <p className="text-slate-400">{imp.impact}</p>
+                  </div>
                 </div>
               </div>
             ))}

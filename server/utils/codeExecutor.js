@@ -1,10 +1,11 @@
 /**
  * Code Execution Utility
  * Safely executes user code in a sandboxed environment and captures output
- * Supports multiple languages (simulated execution for demo purposes)
+ * Supports JavaScript natively; other languages return "not supported" message
  */
 
 const vm = require('vm');
+const { execSync } = require('child_process');
 
 // ─── Helper: Clean code by removing comments ──────────────────────────────────
 
@@ -87,26 +88,59 @@ const executeJavaScript = (code, userInput = '') => {
   }
 };
 
-// ─── Execute Python (simulated) ────────────────────────────────────────────────
+// ─── Validate Syntax for Various Languages ────────────────────────────────────
 
-const executePython = (code, userInput = '') => {
-  // For Python, we simulate execution (real execution would require python-shell or child_process)
-  // In production, use python-shell package or docker
-  return {
-    success: true,
-    output: '[Python execution simulated]\nUnable to execute Python in Node.js environment.\nPlease use Python environment.',
-    error: null,
-  };
-};
-
-// ─── Execute Java (simulated) ──────────────────────────────────────────────────
-
-const executeJava = (code, userInput = '') => {
-  return {
-    success: true,
-    output: '[Java execution simulated]\nUnable to execute Java code directly.\nPlease compile and run in JVM environment.',
-    error: null,
-  };
+const validateSyntax = (code, language) => {
+  try {
+    switch (language) {
+      case 'javascript':
+      case 'typescript':
+        // Parse with Node's built-in parser
+        new vm.Script(code);
+        return { valid: true, error: null };
+      
+      case 'python':
+        // Basic Python syntax validation using regex patterns
+        // Check for common syntax issues
+        if (code.match(/^\s*if\s+.*:\s*$/m) && !code.match(/^\s+\S/m)) {
+          return { valid: false, error: 'SyntaxError: Expected indented block after if statement' };
+        }
+        return { valid: true, error: null };
+      
+      case 'java':
+        // Basic Java syntax validation
+        if (!code.includes('class ') && !code.includes('public ')) {
+          return { valid: false, error: 'SyntaxError: Java code should contain class or public declaration' };
+        }
+        return { valid: true, error: null };
+      
+      case 'cpp':
+        // Basic C++ syntax validation
+        if (!code.includes('#include') && !code.includes('int main')) {
+          return { valid: false, error: 'SyntaxError: C++ code structure incomplete' };
+        }
+        return { valid: true, error: null };
+      
+      case 'go':
+        // Basic Go syntax validation
+        if (!code.includes('package ')) {
+          return { valid: false, error: 'SyntaxError: Go code must declare a package' };
+        }
+        return { valid: true, error: null };
+      
+      case 'rust':
+        // Basic Rust syntax validation
+        if (!code.includes('fn ')) {
+          return { valid: false, error: 'SyntaxError: Rust code must contain at least one function' };
+        }
+        return { valid: true, error: null };
+      
+      default:
+        return { valid: true, error: null };
+    }
+  } catch (err) {
+    return { valid: false, error: `SyntaxError: ${err.message}` };
+  }
 };
 
 // ─── Main execution function ───────────────────────────────────────────────────
@@ -131,27 +165,53 @@ const executeCode = (code, language = 'javascript', userInput = '') => {
       };
     }
 
+    // STEP 1: Validate syntax first
+    const syntaxCheck = validateSyntax(cleanedCode, language);
+    if (!syntaxCheck.valid) {
+      return {
+        success: false,
+        output: '',
+        error: syntaxCheck.error,
+      };
+    }
+
+    // STEP 2: Execute based on language
     switch (language) {
       case 'javascript':
       case 'typescript':
         return executeJavaScript(cleanedCode, userInput);
+      
       case 'python':
-        return executePython(cleanedCode, userInput);
+        // Python not supported in Node.js environment
+        return {
+          success: false,
+          output: '',
+          error: 'Python execution is not supported in this environment. Use a Python runtime or docker container.',
+        };
+      
       case 'java':
-        return executeJava(cleanedCode, userInput);
+        // Java not supported without JVM
+        return {
+          success: false,
+          output: '',
+          error: 'Java execution is not supported in this environment. Use a Java runtime or docker container.',
+        };
+      
       case 'cpp':
       case 'go':
       case 'rust':
+        // Compiled languages not supported
         return {
-          success: true,
-          output: `[${language.toUpperCase()} execution simulated]\nDirect execution not supported in this environment.`,
-          error: null,
+          success: false,
+          output: '',
+          error: `${language.toUpperCase()} execution is not supported in this environment. Use appropriate compiler/runtime.`,
         };
+      
       default:
         return {
-          success: true,
-          output: '[Execution simulated]\nLanguage not supported for direct execution.',
-          error: null,
+          success: false,
+          output: '',
+          error: `Execution not supported for language: ${language}`,
         };
     }
   } catch (err) {
