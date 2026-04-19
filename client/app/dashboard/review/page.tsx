@@ -106,8 +106,14 @@ export default function ReviewPage() {
       setResult(res);
       toast.success('Analysis complete!');
       setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
-    } catch (err) {
-      toast.error(extractErrorMessage(err));
+    } catch (err: any) {
+      // Check if it's a compilation error response
+      if (err.response?.status === 400 && err.response?.data?.data?.compilationError) {
+        // Show compilation error in UI
+        setResult(err.response.data.data as any);
+      } else {
+        toast.error(extractErrorMessage(err));
+      }
     } finally {
       setIsAnalyzing(false);
     }

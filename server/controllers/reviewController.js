@@ -58,7 +58,15 @@ const reviewCode = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Compilation Error',
-        compilationError: validationResult.error,
+        data: {
+          compilationStatus: 'Error',
+          compilationError: validationResult.error,
+          errorType: 'compilation',
+          language: language,
+          fileName: fileName || null,
+          code: code,
+          suggestion: 'Please fix the syntax error above and try again.',
+        },
       });
     }
 
@@ -135,7 +143,15 @@ const uploadCode = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Compilation Error',
-        compilationError: validationResult.error,
+        data: {
+          compilationStatus: 'Error',
+          compilationError: validationResult.error,
+          errorType: 'compilation',
+          language: language,
+          fileName: fileName,
+          code: code,
+          suggestion: 'Please fix the syntax error above and try again.',
+        },
       });
     }
 

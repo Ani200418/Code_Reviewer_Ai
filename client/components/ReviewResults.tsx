@@ -7,9 +7,10 @@ import {
 } from 'react-icons/ri';
 import { AIResponse } from '@/lib/services';
 import ScoreDisplay from './ScoreDisplay';
+import CompilationError from './CompilationError';
 
 interface ReviewResultsProps {
-  result: AIResponse;
+  result: AIResponse | any;  // Can be AIResponse or CompilationError response
   processingTime?: number;
 }
 
@@ -73,6 +74,19 @@ const CopyButton = ({ text }: { text: string }) => {
 };
 
 export default function ReviewResults({ result, processingTime }: ReviewResultsProps) {
+  // Handle compilation error case
+  if (result.compilationStatus === 'Error' || result.compilationError) {
+    return (
+      <CompilationError
+        error={result.compilationError}
+        language={result.language}
+        fileName={result.fileName}
+        code={result.code}
+        suggestion={result.suggestion}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Processing time badge */}
@@ -183,7 +197,7 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
           <p className="text-slate-400 text-sm">No notable edge cases identified.</p>
         ) : (
           <ul className="space-y-2">
-            {result.edge_cases.map((ec, i) => (
+            {result.edge_cases.map((ec: string, i: number) => (
               <li key={i} className="flex items-start gap-2.5 text-sm text-slate-300">
                 <RiAlertLine size={14} className="text-orange-400 flex-shrink-0 mt-0.5" />
                 {ec}
@@ -205,7 +219,7 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
           <p className="text-slate-400 text-sm">No test cases generated.</p>
         ) : (
           <div className="space-y-3">
-            {result.test_cases.map((tc, i) => (
+            {result.test_cases.map((tc: any, i: number) => (
               <div key={i} className="bg-violet-500/5 border border-violet-500/20 rounded-lg overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-violet-500/15">
                   <span className="text-xs font-semibold text-violet-400">Test Case {i + 1}</span>

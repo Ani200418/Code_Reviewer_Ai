@@ -8,9 +8,10 @@ import {
 } from 'react-icons/ri';
 import { AIResponse } from '@/lib/services';
 import ScoreCircle from './ScoreCircle';
+import CompilationError from './CompilationError';
 
 interface ReviewCardProps {
-  result: AIResponse;
+  result: AIResponse | any;  // Can be AIResponse or CompilationError response
   processingTime?: number;
   animate?: boolean;
   compilationStatus?: string;
@@ -114,6 +115,19 @@ export default function ReviewCard({
   compilationStatus,
   currentOutput,
 }: ReviewCardProps) {
+  // Handle compilation error case
+  if (result.compilationStatus === 'Error' || result.compilationError) {
+    return (
+      <CompilationError
+        error={result.compilationError}
+        language={result.language}
+        fileName={result.fileName}
+        code={result.code}
+        suggestion={result.suggestion}
+      />
+    );
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { score, issues, improvements, explanation, edge_cases, test_cases, optimized_code, converted_code } = result as any;
 
