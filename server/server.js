@@ -79,10 +79,13 @@ else app.use(morgan('combined'));
 app.use(globalRateLimiter);
 
 /* ================= DEBUG ================= */
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
+// Remove logging in production
+if (process.env.NODE_ENV === 'development') {
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+}
 
 /* ================= STATIC ================= */
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
