@@ -111,7 +111,7 @@ export default function ReviewPage() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [tab, code, language, uploadedFile]);
+  }, [tab, code, language, uploadedFile, targetLanguage]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
