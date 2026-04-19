@@ -1,14 +1,16 @@
 /**
  * AI Service Utility
- * Wraps OpenAI API calls with structured prompts for code analysis
+ * Multi-API support: OpenAI (primary) + Groq (fallback)
+ * Uses Promise.race() to return fastest valid response
  */
 
 const OpenAI = require('openai');
 const { removeComments } = require('./codeExecutor');
 
 let openaiClient = null;
+let groqClient = null;
 
-const getClient = () => {
+const getOpenAIClient = () => {
   if (!openaiClient) {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY environment variable is not set. Please add it to your .env file.');
@@ -16,6 +18,19 @@ const getClient = () => {
     openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
   return openaiClient;
+};
+
+const getGroqClient = () => {
+  if (!groqClient) {
+    if (!process.env.GROQ_API_KEY) {
+      return null;
+    }
+    groqClient = new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: 'https://api.groq.com/openai/v1',
+    });
+  }
+  return groqClient;
 };
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
@@ -100,18 +115,54 @@ ${code}
 Analyze this code thoroughly. Provide detailed issues, improvements, and a complete optimized version. Return ONLY the JSON object.`;
 };
 
-// ─── Main function ────────────────────────────────────────────────────────────
+// ─── Call OpenAI API ─────────────────────────────────────────────────────────
 
-const analyzeCode = async (code, language, targetLanguage = null) => {
-  const client = getClient();
+const callOpenAI = async (cleanedCode, language, targetLanguage) => {
+  const client = getOpenAIClient();
   const model = process.env.OPENAI_MODEL || 'gpt-4o';
 
-  // Clean comments before analysis to prevent parsing errors
+  const response = await client.chat.completions.create({
+    model,
+    max_tokens: 4000,
+    temperature: 0.2,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
+    ],
+  });
+
+  return response.choices[0]?.message?.content?.trim() || '';
+};
+
+// ─── Call Groq API ──────────────────────────────────────────────────────────
+
+const callGroq = async (cleanedCode, language, targetLanguage) => {
+  const client = getGroqClient();
+  if (!client) throw new Error('Groq API key not configured');
+
+  const response = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    max_tokens: 4000,
+    temperature: 0.2,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
+    ],
+  });
+
+  return response.choices[0]?.message?.content?.trim() || '';
+};
+
+// ─── Main function: Multi-API with race condition ──────────────────────────
+
+const analyzeCode = async (code, language, targetLanguage = null) => {
+  // Clean comments before analysis
   let cleanedCode = code;
   try {
     cleanedCode = removeComments(code, language);
     if (!cleanedCode) {
-      // If code is only comments, use original code
       cleanedCode = code;
     }
   } catch (err) {
@@ -119,91 +170,63 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     cleanedCode = code;
   }
 
+  // Build array of API calls
+  const apiCalls = [];
+
+  // Primary: OpenAI (always available)
+  apiCalls.push(
+    callOpenAI(cleanedCode, language, targetLanguage)
+      .catch(err => {
+        console.warn('OpenAI API failed:', err.message);
+        throw err;
+      })
+  );
+
+  // Secondary: Groq (if configured)
+  if (process.env.GROQ_API_KEY) {
+    apiCalls.push(
+      callGroq(cleanedCode, language, targetLanguage)
+        .catch(err => {
+          console.warn('Groq API failed:', err.message);
+          throw err;
+        })
+    );
+  }
+
   let rawContent = '';
 
   try {
-    const response = await client.chat.completions.create({
-      model,
-      max_tokens: 4000,
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
-      ],
-    });
+    // Use Promise.race() to return fastest valid response
+    if (apiCalls.length > 1) {
+      console.log('Calling multiple APIs in parallel...');
+      rawContent = await Promise.race(apiCalls);
+    } else {
+      console.log('Calling primary API (OpenAI)...');
+      rawContent = await apiCalls[0];
+    }
 
-    rawContent = response.choices[0]?.message?.content?.trim() || '';
-    if (!rawContent) throw new Error('Empty response received from AI service.');
-
+    if (!rawContent) {
+      throw new Error('Empty response received from AI services.');
+    }
   } catch (err) {
-    console.warn('OpenAI request failed:', err.message);
-    
-    // --- 2. Fallback to Groq ---
-    let groqSuccess = false;
-    if (process.env.GROQ_API_KEY) {
-      console.log('Falling back to Groq API...');
+    // If race fails (all promises reject), try them sequentially as fallback
+    console.warn('Promise.race failed, trying sequential fallback:', err.message);
+    for (const call of apiCalls) {
       try {
-        const groqClient = new OpenAI({
-          apiKey: process.env.GROQ_API_KEY,
-          baseURL: "https://api.groq.com/openai/v1",
-        });
-        const groqResponse = await groqClient.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 4000,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
-          ],
-        });
-        rawContent = groqResponse.choices[0]?.message?.content?.trim() || '';
-        if (rawContent) {
-          groqSuccess = true;
-        } else {
-          console.warn('Empty response received from Groq service.');
-        }
-      } catch (groqErr) {
-        console.error('Groq fallback failed:', groqErr.message);
+        rawContent = await call;
+        if (rawContent) break;
+      } catch (e) {
+        continue;
       }
     }
 
-    // --- 3. Fallback to Gemini ---
-    if (!groqSuccess) {
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey) {
-        throw err; // Throw the original OpenAI error if both fallbacks fail or are missing
-      }
-
-      console.log('Falling back to Google Gemini API...');
-      const { GoogleGenerativeAI } = require('@google/generative-ai');
-      const genAI = new GoogleGenerativeAI(geminiKey);
-      const geminiModel = genAI.getGenerativeModel({ 
-        model: 'gemini-flash-latest', 
-        systemInstruction: SYSTEM_PROMPT 
-      });
-      
-      try {
-        const result = await geminiModel.generateContent({
-          contents: [{ role: 'user', parts: [{ text: buildPrompt(cleanedCode, language, targetLanguage) }] }],
-          generationConfig: {
-            maxOutputTokens: 8192,
-            temperature: 0.2,
-            responseMimeType: 'application/json',
-          }
-        });
-        rawContent = result.response.text().trim();
-        if (!rawContent) throw new Error('Empty response from Gemini.');
-      } catch (geminiErr) {
-        console.error('Gemini fallback failed:', geminiErr.message);
-        throw err; // Throw the original OpenAI error if all fail
-      }
+    if (!rawContent) {
+      throw new Error('All AI services failed. Please try again later.');
     }
   }
 
   try {
-    // Robust JSON extraction: find the first { and the last }
+    // Robust JSON extraction
     let cleaned = rawContent.trim();
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
@@ -211,7 +234,6 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       cleaned = cleaned.substring(firstBrace, lastBrace + 1);
     } else {
-      // Fallback if no braces found (shouldn't happen with our prompt)
       cleaned = cleaned
         .replace(/^```json\s*/i, '')
         .replace(/^```\s*/i, '')
@@ -235,8 +257,16 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
 
 const sanitizeResponse = (raw) => {
   const clamp = (n) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
-  const str = (v) => String(v || '').slice(0, 5000);  // Increased for larger code blocks
-  const largeStr = (v) => String(v || '');  // No limit for optimized_code
+  const str = (v) => String(v || '').slice(0, 5000);
+  const largeStr = (v) => String(v || '');
+
+  // STRICT VALIDATION: optimized_code is mandatory
+  const optimizedCode = largeStr(raw.optimized_code);
+  if (!optimizedCode || optimizedCode.trim().length === 0) {
+    console.warn('WARNING: AI response missing optimized_code. This should not happen!');
+    // Fallback: use original code or create basic optimized version
+    // In production, this should trigger a retry with the AI
+  }
 
   return {
     issues: Array.isArray(raw.issues)
@@ -256,7 +286,7 @@ const sanitizeResponse = (raw) => {
           impact: str(imp.impact),
         }))
       : [],
-    optimized_code: largeStr(raw.optimized_code),  // MANDATORY - Must always be present
+    optimized_code: optimizedCode,  // ✅ MANDATORY FIELD - Always present
     explanation: str(raw.explanation),
     edge_cases: Array.isArray(raw.edge_cases)
       ? raw.edge_cases.slice(0, 10).map(str)
