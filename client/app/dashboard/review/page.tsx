@@ -227,28 +227,60 @@ export default function ReviewPage() {
       {/* Analyzing */}
       {isAnalyzing && <Loader variant="analyzing" />}
 
-      {/* Results */}
+      {/* Results or Error State */}
       {result && !isAnalyzing && (
         <div id="results">
-          {/* Action bar */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-sm font-medium text-slate-300">Analysis Complete</span>
-              <span className="badge-sky text-xs capitalize">{result.language}</span>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setShowShare(true)} className="btn-secondary text-xs py-1.5 px-3">
-                <RiShareLine size={13} /> Share
-              </button>
-            </div>
+          {/* Check if this is an error response */}
+          {(result as any)?.compilationStatus === 'Error' || (result as any)?.compilationError ? (
+            <>
+              {/* Error status bar */}
+              <div className="flex items-center gap-3 mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                <div className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="text-sm font-medium text-red-300">Analysis Error</span>
+                <span className="badge-sky text-xs capitalize">{(result as any)?.language || 'unknown'}</span>
+              </div>
+              {/* Render error display */}
+              <ReviewCard 
+                result={result as any}
+                processingTime={result.processingTime}
+                compilationStatus={(result as any).compilationStatus}
+                currentOutput={(result as any).currentOutput}
+              />
+            </>
+          ) : (
+            <>
+              {/* Success status bar */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-400" />
+                  <span className="text-sm font-medium text-slate-300">Analysis Complete</span>
+                  <span className="badge-sky text-xs capitalize">{result.language}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowShare(true)} className="btn-secondary text-xs py-1.5 px-3">
+                    <RiShareLine size={13} /> Share
+                  </button>
+                </div>
+              </div>
+              {/* Render results */}
+              <ReviewCard 
+                result={result.aiResponse} 
+                processingTime={result.processingTime}
+                compilationStatus={(result as any).compilationStatus}
+                currentOutput={(result as any).currentOutput}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* No results yet - Show placeholder */}
+      {!result && !isAnalyzing && (
+        <div className="mt-12 text-center">
+          <div className="text-slate-400 text-sm">
+            <p>👆 Submit code above to get started</p>
+            <p className="text-xs mt-1">Paste code or upload a file to analyze</p>
           </div>
-          <ReviewCard 
-            result={result.aiResponse} 
-            processingTime={result.processingTime}
-            compilationStatus={result.compilationStatus}
-            currentOutput={result.currentOutput}
-          />
         </div>
       )}
 
