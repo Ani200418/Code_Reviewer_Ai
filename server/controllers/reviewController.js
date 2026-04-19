@@ -6,7 +6,7 @@
 const path      = require('path');
 const Review    = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
-const { executeCode } = require('../utils/codeExecutor');
+const { executeCode, validateUTF8 } = require('../utils/codeExecutor');
 const { reviewCodeSchema } = require('../utils/validators');
 
 const SUPPORTED_LANGUAGES = ['javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'other'];
@@ -121,24 +121,56 @@ const uploadCode = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const code     = req.file.buffer.toString('utf8');
     const fileName = req.file.originalname;
     const language = detectLanguage(fileName);
 
+    // Step 1: Validate UTF-8 encoding
+    const utf8Validation = validateUTF8(req.file.buffer);
+    if (!utf8Validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: 'File Encoding Error',
+        data: {
+          compilationStatus: 'Error',
+          compilationError: utf8Validation.error,
+          errorType: 'encoding',
+          language,
+          fileName,
+          code: '',
+          suggestion: 'Please ensure the file is encoded in UTF-8 format.',
+        },
+      });
+    }
+
+    const code = utf8Validation.content;
+
+    // Step 2: Validate file is not empty
     if (!code.trim()) {
       return res.status(400).json({ success: false, message: 'Uploaded file is empty' });
     }
 
+    // Step 3: Check file size (50KB limit for analysis)
     if (code.length > 50000) {
-      return res.status(400).json({ success: false, message: 'File content exceeds 50,000 characters' });
+      return res.status(400).json({
+        success: false,
+        message: 'File too large',
+        data: {
+          compilationStatus: 'Error',
+          compilationError: `File exceeds 50,000 characters (${code.length} chars)`,
+          errorType: 'size',
+          language,
+          fileName,
+          code: '',
+          suggestion: 'Please upload a smaller file or split into multiple files.',
+        },
+      });
     }
 
     const start = Date.now();
 
-    // Step 1: Validate code first
+    // Step 4: Validate code syntax first (fail fast on syntax errors)
     const validationResult = executeCode(code, language, '');
     
-    // Step 2: If compilation error, return immediately (no analysis)
     if (!validationResult.success && validationResult.error) {
       return res.status(400).json({
         success: false,
@@ -147,24 +179,25 @@ const uploadCode = async (req, res, next) => {
           compilationStatus: 'Error',
           compilationError: validationResult.error,
           errorType: 'compilation',
-          language: language,
-          fileName: fileName,
-          code: code,
+          language,
+          fileName,
+          code,
           suggestion: 'Please fix the syntax error above and try again.',
         },
       });
     }
 
-    // Step 3: Code is valid, proceed to AI analysis
-    const aiResponse = await analyzeCode(code, language, req.body.targetLanguage);
+    // Step 5: Code is valid, proceed to AI analysis
+    const targetLanguage = req.body.targetLanguage || null;
+    const aiResponse = await analyzeCode(code, language, targetLanguage);
 
-    // Step 4: Execute the code to get actual output
+    // Step 6: Execute the code to get actual output
     const executionResult = executeCode(code, language, '');
     const processingTime = Date.now() - start;
 
-    // Step 5: Save review
+    // Step 7: Save review with complete information
     const review = await Review.create({
-      userId:   req.userId,
+      userId:            req.userId,
       code,
       language,
       fileName,
@@ -174,11 +207,11 @@ const uploadCode = async (req, res, next) => {
         success: executionResult.success || false,
       },
       aiResponse,
-      score:    aiResponse.score.overall,
+      score:             aiResponse.score.overall,
       processingTime,
     });
 
-    // Step 6: Return complete analysis with output
+    // Step 8: Return complete analysis
     res.status(201).json({
       success: true,
       data: {
