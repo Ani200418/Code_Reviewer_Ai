@@ -12,19 +12,6 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { usePublicRoute } from '@/lib/hooks/useAuth';
 import { extractErrorMessage } from '@/lib/utils';
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (cfg: object) => void;
-          renderButton: (el: HTMLElement, cfg: object) => void;
-        };
-      };
-    };
-  }
-}
-
 interface FormState {
   name: string; email: string; password: string; confirmPassword: string;
 }

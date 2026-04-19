@@ -9,21 +9,6 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { usePublicRoute } from '@/lib/hooks/useAuth';
 import { extractErrorMessage } from '@/lib/utils';
 
-/* ── Google ID token type ─────────────────────────────────────────────────── */
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (cfg: object) => void;
-          renderButton: (el: HTMLElement, cfg: object) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
-
 export default function LoginPage() {
   const { login, loginWithGoogle } = useAuth();
   const router  = useRouter();
