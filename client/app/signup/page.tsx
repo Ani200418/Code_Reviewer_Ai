@@ -54,13 +54,14 @@ export default function SignupPage() {
 
   useEffect(() => {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId) return;
+    if (!clientId || window.google?.accounts) return;
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      window.google?.accounts.id.initialize({
+      if (!window.google?.accounts) return;
+      window.google.accounts.id.initialize({
         client_id: clientId,
         callback: handleGoogleCredential,
         auto_select: false,
@@ -79,7 +80,13 @@ export default function SignupPage() {
       }
     };
     document.head.appendChild(script);
-    return () => { document.head.removeChild(script); };
+    return () => { 
+      try { 
+        document.head.removeChild(script); 
+      } catch (e) {
+        // Script already removed
+      }
+    };
   }, [handleGoogleCredential]);
 
   /* ── Form ─────────────────────────────────────────────────────────────── */
