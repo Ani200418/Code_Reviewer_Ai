@@ -7,7 +7,7 @@ const path      = require('path');
 const Review    = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
 const { executeCode } = require('../utils/codeExecutor');
-const { reviewCodeSchema } = require('../utils/validators');
+const { reviewCodeSchema, runCodeSchema } = require('../utils/validators');
 
 const SUPPORTED_LANGUAGES = ['javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'other'];
 
@@ -34,6 +34,41 @@ const detectLanguage = (fileName) => {
   return EXT_TO_LANG[ext] || 'other';
 };
 
+// ─── POST /api/run ────────────────────────────────────────────────────────────
+
+const runCode = async (req, res, next) => {
+  try {
+    const { error, value } = runCodeSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: error.details.map((d) => d.message),
+      });
+    }
+
+    const { code, language, userInput = '' } = value;
+    const start = Date.now();
+
+    // Execute code only (no AI analysis)
+    const executionResult = executeCode(code, language, userInput);
+    const processingTime = Date.now() - start;
+
+    // Return execution result regardless of success/failure
+    res.status(200).json({
+      success: executionResult.success,
+      data: {
+        output: executionResult.output || '',
+        error: executionResult.error || null,
+        success: executionResult.success,
+        processingTime,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── POST /api/review-code ────────────────────────────────────────────────────
 
 const reviewCode = async (req, res, next) => {
@@ -47,13 +82,23 @@ const reviewCode = async (req, res, next) => {
       });
     }
 
-    const { code, language, fileName, targetLanguage, userInput = '' } = req.body;
+    const { code, language, fileName, targetLanguage, userInput = '' } = value;
     const start = Date.now();
 
-    // Execute code to get actual output
+    // Step 1: Execute code to get actual output
     const executionResult = executeCode(code, language, userInput);
     
-    // Analyze code with AI
+    // Step 2: If execution has an error, return it immediately WITHOUT AI analysis
+    if (!executionResult.success && executionResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Code execution failed - compilation or runtime error',
+        executionError: executionResult.error,
+        output: executionResult.output || '',
+      });
+    }
+
+    // Step 3: Only proceed to AI analysis if execution succeeds or has no errors
     const aiResponse = await analyzeCode(code, language, targetLanguage);
     const processingTime = Date.now() - start;
 
@@ -294,6 +339,7 @@ const deleteReview = async (req, res, next) => {
 };
 
 module.exports = {
+  runCode,
   reviewCode,
   uploadCode,
   getReviews,

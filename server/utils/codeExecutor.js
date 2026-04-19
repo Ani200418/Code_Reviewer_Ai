@@ -33,15 +33,36 @@ const executeJavaScript = (code, userInput = '') => {
   try {
     const logs = [];
     const originalLog = console.log;
+    const originalError = console.error;
     
-    // Capture console.log
+    // Capture console output
     console.log = (...args) => {
       logs.push(args.map(arg => String(arg)).join(' '));
     };
+    console.error = (...args) => {
+      logs.push(args.map(arg => String(arg)).join(' '));
+    };
+
+    // Parse user input - handle plain text, JSON, or multiline
+    let userInputArg = '';
+    try {
+      // Try to parse as JSON first
+      if (userInput.trim().startsWith('{') || userInput.trim().startsWith('[')) {
+        userInputArg = JSON.parse(userInput);
+      } else {
+        // Treat as plain text or multiline string
+        userInputArg = userInput.trim();
+      }
+    } catch {
+      // If not JSON, just use as string
+      userInputArg = userInput.trim();
+    }
 
     const sandbox = {
-      console: { log: console.log },
-      process: { argv: userInput ? userInput.split('\n') : [] },
+      console: { log: console.log, error: console.error },
+      process: { argv: [userInputArg] },
+      // Expose input directly for easy access
+      INPUT: userInputArg,
     };
 
     const script = new vm.Script(code);
@@ -49,13 +70,15 @@ const executeJavaScript = (code, userInput = '') => {
     script.runInContext(context, { timeout: 5000 });
 
     console.log = originalLog;
+    console.error = originalError;
     return {
       success: true,
-      output: logs.join('\n'),
+      output: logs.join('\n') || '(no output)',
       error: null,
     };
   } catch (err) {
     console.log = originalLog;
+    console.error = originalError;
     return {
       success: false,
       output: '',

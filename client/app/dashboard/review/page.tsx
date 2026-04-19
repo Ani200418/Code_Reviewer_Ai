@@ -9,6 +9,7 @@ import CodeEditor from '@/components/CodeEditor';
 import ReviewCard from '@/components/ReviewCard';
 import FileUpload from '@/components/FileUpload';
 import CodeInput from '@/components/CodeInput';
+import ExecutionPanel from '@/components/ExecutionPanel';
 import ShareModal from '@/components/ShareModal';
 import Loader from '@/components/Loader';
 
@@ -189,6 +190,14 @@ export default function ReviewPage() {
           <CodeInput
             value={userInput}
             onChange={setUserInput}
+            disabled={isAnalyzing}
+          />
+
+          {/* Execution Panel (Run Code Without Analysis) */}
+          <ExecutionPanel
+            code={code}
+            language={language}
+            userInput={userInput}
             disabled={isAnalyzing}
           />
 

@@ -90,6 +90,14 @@ export interface PaginatedReviews {
 
 export const reviewService = {
   /**
+   * Run code without AI analysis
+   */
+  runCode: async (code: string, language: string, userInput?: string): Promise<ExecutionOutput & { processingTime: number }> => {
+    const res = await api.post('/run', { code, language, userInput });
+    return res.data.data;
+  },
+
+  /**
    * Submit code text for AI analysis
    */
   reviewCode: async (code: string, language: string, targetLanguage?: string, fileName?: string, userInput?: string): Promise<ReviewResult> => {

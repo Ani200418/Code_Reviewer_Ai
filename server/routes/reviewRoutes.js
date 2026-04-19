@@ -16,6 +16,7 @@ const { protect }       = require('../middlewares/authMiddleware');
 const { aiRateLimiter } = require('../middlewares/rateLimiter');
 
 const {
+  runCode,
   reviewCode,
   uploadCode,
   getReviews,
@@ -47,6 +48,7 @@ router.get('/review/:id/public', getPublicReview);
 // ── Protected ─────────────────────────────────────────────────────────────────
 router.use(protect);
 
+router.post('/run',          aiRateLimiter, runCode);
 router.post('/review-code',  aiRateLimiter, reviewCode);
 router.post('/upload-code',  aiRateLimiter, upload.single('file'), uploadCode);
 
