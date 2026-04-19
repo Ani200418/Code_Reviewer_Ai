@@ -13,7 +13,8 @@ interface ReviewCardProps {
   result: AIResponse;
   processingTime?: number;
   animate?: boolean;
-  executionOutput?: { output: string; error: string | null; success: boolean };
+  compilationStatus?: string;
+  currentOutput?: string;
 }
 
 /* ─── Collapsible section ─────────────────────────────────────────── */
@@ -110,13 +111,57 @@ export default function ReviewCard({
   result,
   processingTime,
   animate = true,
-  executionOutput,
+  compilationStatus,
+  currentOutput,
 }: ReviewCardProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { score, bugs, optimizations, explanation, edge_cases, test_cases, converted_code } = result as any;
 
   return (
     <div className={`space-y-4 ${animate ? 'animate-slide-up' : ''}`}>
+      {/* ── Compilation Status ── */}
+      {compilationStatus && (
+        <div className="card-glow p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: compilationStatus === 'Success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }}>
+                {compilationStatus === 'Success' ? (
+                  <RiCheckLine size={18} className="text-green-400" />
+                ) : (
+                  <RiAlertLine size={18} className="text-red-400" />
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Compilation Status</p>
+                <p className="text-sm font-semibold" style={{ color: compilationStatus === 'Success' ? '#10b981' : '#f87171' }}>
+                  {compilationStatus}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Execution Output ── */}
+      {currentOutput !== undefined && (
+        <div className="card-glow p-5">
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Execution Output</p>
+              <code
+                className="block text-xs font-mono p-3 rounded-lg whitespace-pre-wrap break-all max-h-48 overflow-y-auto"
+                style={{
+                  background: 'rgba(51, 65, 85, 0.5)',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  color: '#cbd5e1',
+                }}
+              >
+                {currentOutput || '(No output)'}
+              </code>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Score Dashboard ── */}
       <div className="card-glow p-6">
         <div className="section-label">Quality Analysis</div>
@@ -300,27 +345,6 @@ export default function ReviewCard({
         count={test_cases.length}
         defaultOpen={false}
       >
-        {/* Show actual execution output if available */}
-        {executionOutput && (
-          <div className="mb-4 pb-4 border-b border-slate-700">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Actual Output (Executed)</p>
-                <code
-                  className="block text-xs font-mono p-3 rounded-lg whitespace-pre-wrap break-all max-h-32 overflow-y-auto"
-                  style={{
-                    background: executionOutput.error && !executionOutput.success ? 'rgba(239,68,68,0.05)' : 'rgba(16,185,129,0.05)',
-                    border: `1px solid ${executionOutput.error && !executionOutput.success ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)'}`,
-                    color: executionOutput.error && !executionOutput.success ? '#fca5a5' : '#86efac',
-                  }}
-                >
-                  {executionOutput.error && !executionOutput.success ? executionOutput.error : executionOutput.output || '(No output)'}
-                </code>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Generated test cases */}
         {test_cases.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)] py-2">No test cases generated.</p>

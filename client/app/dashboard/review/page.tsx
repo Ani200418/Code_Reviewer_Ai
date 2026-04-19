@@ -2,14 +2,12 @@
 
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { RiSparklingLine, RiUpload2Line, RiEdit2Line, RiShareLine } from 'react-icons/ri';
+import { RiSparklingLine, RiUpload2Line, RiEdit2Line, RiShareLine, RiInformationLine } from 'react-icons/ri';
 import { reviewService, ReviewResult } from '@/lib/services';
 import { LANGUAGE_OPTIONS, LanguageValue, extractErrorMessage } from '@/lib/utils';
 import CodeEditor from '@/components/CodeEditor';
 import ReviewCard from '@/components/ReviewCard';
 import FileUpload from '@/components/FileUpload';
-import CodeInput from '@/components/CodeInput';
-import ExecutionPanel from '@/components/ExecutionPanel';
 import ShareModal from '@/components/ShareModal';
 import Loader from '@/components/Loader';
 
@@ -79,7 +77,6 @@ export default function ReviewPage() {
   const [language, setLanguage] = useState<LanguageValue>('javascript');
   const [targetLanguage, setTargetLanguage] = useState<LanguageValue | ''>('');
   const [code, setCode] = useState(SAMPLE.javascript);
-  const [userInput, setUserInput] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ReviewResult | null>(null);
@@ -104,8 +101,8 @@ export default function ReviewPage() {
     setResult(null);
     try {
       const res = tab === 'upload' && uploadedFile
-        ? await reviewService.uploadCodeFile(uploadedFile, targetLanguage || undefined, userInput || undefined)
-        : await reviewService.reviewCode(code, language, targetLanguage || undefined, undefined, userInput || undefined);
+        ? await reviewService.uploadCodeFile(uploadedFile, targetLanguage || undefined)
+        : await reviewService.reviewCode(code, language, targetLanguage || undefined);
       setResult(res);
       toast.success('Analysis complete!');
       setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
@@ -114,7 +111,7 @@ export default function ReviewPage() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [tab, code, language, uploadedFile, targetLanguage, userInput]);
+  }, [tab, code, language, uploadedFile, targetLanguage]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -144,6 +141,14 @@ export default function ReviewPage() {
                 {label}
               </button>
             ))}
+          </div>
+
+          {/* Info Banner */}
+          <div className="flex items-start gap-3 p-3 rounded-lg" style={{ background: 'rgba(96, 165, 250, 0.05)', border: '1px solid rgba(96, 165, 250, 0.1)' }}>
+            <RiInformationLine size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-slate-300">
+              This platform analyzes your code with AI. Results may take a few seconds depending on code complexity. We validate syntax first, then provide detailed analysis and suggestions.
+            </p>
           </div>
 
           {/* Editor or Upload */}
@@ -185,21 +190,6 @@ export default function ReviewPage() {
               disabled={isAnalyzing}
             />
           )}
-
-          {/* Code Input (Optional) */}
-          <CodeInput
-            value={userInput}
-            onChange={setUserInput}
-            disabled={isAnalyzing}
-          />
-
-          {/* Execution Panel (Run Code Without Analysis) */}
-          <ExecutionPanel
-            code={code}
-            language={language}
-            userInput={userInput}
-            disabled={isAnalyzing}
-          />
 
           {/* Submit */}
           <div className="flex items-center justify-between pt-1">
@@ -250,7 +240,8 @@ export default function ReviewPage() {
           <ReviewCard 
             result={result.aiResponse} 
             processingTime={result.processingTime}
-            executionOutput={result.executionOutput}
+            compilationStatus={result.compilationStatus}
+            currentOutput={result.currentOutput}
           />
         </div>
       )}

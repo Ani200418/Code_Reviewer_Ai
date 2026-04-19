@@ -70,31 +70,6 @@ const reviewCodeSchema = Joi.object({
     }),
   fileName: Joi.string().trim().max(255).optional().allow('', null),
   targetLanguage: Joi.string().trim().lowercase().valid(...SUPPORTED_LANGUAGES).optional().allow('', null),
-  userInput: Joi.string().max(10000).optional().allow('', null).default('').messages({
-    'string.max': 'User input cannot exceed 10,000 characters',
-  }),
 });
 
-// ─── Run Code Validator (for /run endpoint) ────────────────────────────────
-
-const runCodeSchema = Joi.object({
-  code: Joi.string().trim().min(1).max(50000).required().messages({
-    'string.min': 'Code cannot be empty',
-    'string.max': 'Code cannot exceed 50,000 characters',
-    'any.required': 'Code is required',
-  }),
-  language: Joi.string()
-    .trim()
-    .lowercase()
-    .valid(...SUPPORTED_LANGUAGES)
-    .required()
-    .messages({
-      'any.only': `Language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`,
-      'any.required': 'Language is required',
-    }),
-  userInput: Joi.string().max(10000).optional().allow('', null).default('').messages({
-    'string.max': 'User input cannot exceed 10,000 characters',
-  }),
-});
-
-module.exports = { signupSchema, loginSchema, reviewCodeSchema, runCodeSchema };
+module.exports = { signupSchema, loginSchema, reviewCodeSchema };

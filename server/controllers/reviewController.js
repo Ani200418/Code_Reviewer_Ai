@@ -7,7 +7,7 @@ const path      = require('path');
 const Review    = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
 const { executeCode } = require('../utils/codeExecutor');
-const { reviewCodeSchema, runCodeSchema } = require('../utils/validators');
+const { reviewCodeSchema } = require('../utils/validators');
 
 const SUPPORTED_LANGUAGES = ['javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'other'];
 
@@ -34,41 +34,6 @@ const detectLanguage = (fileName) => {
   return EXT_TO_LANG[ext] || 'other';
 };
 
-// ─── POST /api/run ────────────────────────────────────────────────────────────
-
-const runCode = async (req, res, next) => {
-  try {
-    const { error, value } = runCodeSchema.validate(req.body, { abortEarly: false });
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: error.details.map((d) => d.message),
-      });
-    }
-
-    const { code, language, userInput = '' } = value;
-    const start = Date.now();
-
-    // Execute code only (no AI analysis)
-    const executionResult = executeCode(code, language, userInput);
-    const processingTime = Date.now() - start;
-
-    // Return execution result regardless of success/failure
-    res.status(200).json({
-      success: executionResult.success,
-      data: {
-        output: executionResult.output || '',
-        error: executionResult.error || null,
-        success: executionResult.success,
-        processingTime,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
 // ─── POST /api/review-code ────────────────────────────────────────────────────
 
 const reviewCode = async (req, res, next) => {
@@ -82,32 +47,34 @@ const reviewCode = async (req, res, next) => {
       });
     }
 
-    const { code, language, fileName, targetLanguage, userInput = '' } = value;
+    const { code, language, fileName, targetLanguage } = value;
     const start = Date.now();
 
-    // Step 1: Execute code to get actual output
-    const executionResult = executeCode(code, language, userInput);
+    // Step 1: Try to validate/compile code first
+    const validationResult = executeCode(code, language, '');
     
-    // Step 2: If execution has an error, return it immediately WITHOUT AI analysis
-    if (!executionResult.success && executionResult.error) {
+    // Step 2: If compilation/syntax error exists, return immediately (no analysis)
+    if (!validationResult.success && validationResult.error) {
       return res.status(400).json({
         success: false,
-        message: 'Code execution failed - compilation or runtime error',
-        executionError: executionResult.error,
-        output: executionResult.output || '',
+        message: 'Compilation Error',
+        compilationError: validationResult.error,
       });
     }
 
-    // Step 3: Only proceed to AI analysis if execution succeeds or has no errors
+    // Step 3: Code is valid, proceed to AI analysis
     const aiResponse = await analyzeCode(code, language, targetLanguage);
+
+    // Step 4: Execute the code to get actual output
+    const executionResult = executeCode(code, language, '');
     const processingTime = Date.now() - start;
 
+    // Step 5: Save review with complete information
     const review = await Review.create({
       userId:       req.userId,
       code,
       language,
       fileName:     fileName || null,
-      userInput:    userInput || '',
       executionOutput: {
         output: executionResult.output || '',
         error: executionResult.error || null,
@@ -118,14 +85,15 @@ const reviewCode = async (req, res, next) => {
       processingTime,
     });
 
+    // Step 6: Return complete analysis with output
     res.status(201).json({
       success: true,
       data: {
         reviewId:           review._id,
         language:           review.language,
         fileName:           review.fileName,
-        userInput:          review.userInput,
-        executionOutput:    review.executionOutput,
+        compilationStatus:  'Success',
+        currentOutput:      executionResult.output || '',
         aiResponse:         review.aiResponse,
         score:              review.score,
         processingTime:     review.processingTime,
@@ -157,21 +125,33 @@ const uploadCode = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'File content exceeds 50,000 characters' });
     }
 
-    const start      = Date.now();
+    const start = Date.now();
+
+    // Step 1: Validate code first
+    const validationResult = executeCode(code, language, '');
     
-    // Execute code to get actual output
-    const executionResult = executeCode(code, language, req.body.userInput || '');
-    
-    // Analyze code with AI
+    // Step 2: If compilation error, return immediately (no analysis)
+    if (!validationResult.success && validationResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Compilation Error',
+        compilationError: validationResult.error,
+      });
+    }
+
+    // Step 3: Code is valid, proceed to AI analysis
     const aiResponse = await analyzeCode(code, language, req.body.targetLanguage);
+
+    // Step 4: Execute the code to get actual output
+    const executionResult = executeCode(code, language, '');
     const processingTime = Date.now() - start;
 
+    // Step 5: Save review
     const review = await Review.create({
       userId:   req.userId,
       code,
       language,
       fileName,
-      userInput: req.body.userInput || '',
       executionOutput: {
         output: executionResult.output || '',
         error: executionResult.error || null,
@@ -182,14 +162,15 @@ const uploadCode = async (req, res, next) => {
       processingTime,
     });
 
+    // Step 6: Return complete analysis with output
     res.status(201).json({
       success: true,
       data: {
         reviewId:           review._id,
         language:           review.language,
         fileName:           review.fileName,
-        userInput:          review.userInput,
-        executionOutput:    review.executionOutput,
+        compilationStatus:  'Success',
+        currentOutput:      executionResult.output || '',
         aiResponse:         review.aiResponse,
         score:              review.score,
         processingTime:     review.processingTime,
@@ -339,7 +320,6 @@ const deleteReview = async (req, res, next) => {
 };
 
 module.exports = {
-  runCode,
   reviewCode,
   uploadCode,
   getReviews,
