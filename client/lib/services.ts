@@ -58,6 +58,14 @@ export interface ReviewResult {
   createdAt: string;
 }
 
+/**
+ * Execute code and get AI analysis
+ */
+export interface AnalyzeResult {
+  output: string;
+  analysis: AIResponse;
+}
+
 export interface ReviewHistoryItem {
   _id: string;
   language: string;
@@ -151,5 +159,17 @@ export const reviewService = {
   getPublicReview: async (id: string): Promise<ReviewHistoryItem & { code: string; aiResponse: AIResponse }> => {
     const res = await api.get(`/review/${id}/public`);
     return res.data.data;
+  },
+};
+
+// ─── Analyze API ──────────────────────────────────────────────────────────────
+
+export const analyzeService = {
+  /**
+   * Execute code in Docker sandbox and get AI analysis
+   */
+  analyze: async (code: string, language: string): Promise<AnalyzeResult> => {
+    const res = await api.post('/analyze', { code, language });
+    return res.data;
   },
 };

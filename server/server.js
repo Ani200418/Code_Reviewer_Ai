@@ -11,6 +11,7 @@ const path     = require('path');
 
 const authRoutes   = require('./routes/authRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
+const analyzeRoutes = require('./routes/analyzeRoutes');
 const { errorHandler, notFound } = require('./middlewares/errorHandler');
 const { globalRateLimiter }      = require('./middlewares/rateLimiter');
 
@@ -101,7 +102,8 @@ app.get('/health', (req, res) =>
 
 /* ================= ROUTES ================= */
 app.use('/api/auth', authRoutes);
-app.use('/api',      reviewRoutes);
+app.use('/api', analyzeRoutes);
+app.use('/api', reviewRoutes);
 
 /* ================= ERROR HANDLING ================= */
 app.use(notFound);
