@@ -34,10 +34,10 @@ export default function ShareModal({ reviewId, language, score, aiResponse, onCl
 
   const handleTwitter = () => {
     const scoreLabel = score >= 80 ? 'Great' : score >= 60 ? 'Good' : 'Needs Work';
-    const issueCount = aiResponse.issues?.length || 0;
-    const improvementCount = aiResponse.improvements?.length || 0;
+    const issuesCount = aiResponse.issues?.length || 0;
+    const improvementsCount = aiResponse.improvements?.length || 0;
     const text = encodeURIComponent(
-      `Just reviewed my ${language} code with AI!\n\n📊 Score: ${score}/100 (${scoreLabel})\n🐛 Issues: ${issueCount} found\n⚡ Improvements: ${improvementCount} suggested\n\nCheck it out 👇\n${publicUrl}\n\n#CodeReview #${language} #AI #Dev`
+      `Just reviewed my ${language} code with AI!\n\n📊 Score: ${score}/100 (${scoreLabel})\n🐛 Issues: ${issuesCount} found\n⚡ Improvements: ${improvementsCount} suggested\n\nCheck it out 👇\n${publicUrl}\n\n#CodeReview #${language} #AI #Dev`
     );
     window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
   };
@@ -104,7 +104,7 @@ export default function ShareModal({ reviewId, language, score, aiResponse, onCl
             </div>
             <div>
               <p className="text-sm font-medium text-[var(--text-secondary)] capitalize">{language} code review</p>
-              <p className="text-xs text-[var(--text-muted)]">{(aiResponse.issues?.length || 0)} issues · {(aiResponse.improvements?.length || 0)} improvements</p>
+              <p className="text-xs text-[var(--text-muted)]">{aiResponse.issues?.length || 0} issues · {aiResponse.improvements?.length || 0} improvements</p>
             </div>
             <span className="badge-sky ml-auto">Public</span>
           </div>

@@ -106,33 +106,26 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
         {!result.issues || result.issues.length === 0 ? (
           <div className="flex items-center gap-2 text-green-400 text-sm">
             <RiCheckLine size={16} />
-            <span>No issues found. Excellent code!</span>
+            <span>No issues detected. Excellent code!</span>
           </div>
         ) : (
           <div className="space-y-4">
             {result.issues.map((issue: any, i: number) => (
               <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-start gap-2">
-                    <span 
-                      className="px-2 py-0.5 rounded text-xs font-bold flex-shrink-0"
-                      style={{ 
-                        background: issue.severity === 'high' ? 'rgba(239,68,68,0.2)' : issue.severity === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(56,189,248,0.2)',
-                        color: issue.severity === 'high' ? '#f87171' : issue.severity === 'medium' ? '#fbbf24' : '#38bdf8'
-                      }}
-                    >
-                      {issue.severity.toUpperCase()}
-                    </span>
-                    <div>
-                      <p className="text-red-300 font-medium text-sm">{issue.description}</p>
-                      <p className="text-xs text-slate-500 mt-1">Type: {issue.type}</p>
-                    </div>
-                  </div>
+                <div className="flex items-start gap-2 mb-2">
+                  <span 
+                    className="px-2 py-0.5 rounded text-xs font-bold flex-shrink-0"
+                    style={{ 
+                      background: issue.severity === 'high' ? 'rgba(239,68,68,0.2)' : issue.severity === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(56,189,248,0.2)',
+                      color: issue.severity === 'high' ? '#f87171' : issue.severity === 'medium' ? '#fbbf24' : '#38bdf8'
+                    }}
+                  >
+                    {issue.severity.toUpperCase()}
+                  </span>
+                  <p className="text-red-300 font-medium text-sm">{issue.description}</p>
                 </div>
-                <div className="mt-2 pl-2">
-                  <p className="text-xs text-slate-500 font-semibold mb-1">Fix:</p>
-                  <p className="text-slate-400 text-sm">{issue.suggestion}</p>
-                </div>
+                <p className="text-slate-400 text-xs mb-2">Type: {issue.type}</p>
+                <p className="text-slate-400 text-sm leading-relaxed">Fix: {issue.suggestion}</p>
               </div>
             ))}
           </div>
@@ -152,16 +145,14 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
           <div className="space-y-4">
             {result.improvements.map((imp: any, i: number) => (
               <div key={i} className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
-                <p className="text-amber-300 font-medium text-sm mb-2">
-                  {imp.area}: {imp.suggested}
-                </p>
+                <p className="text-amber-300 font-medium text-sm mb-2">{imp.area}: {imp.suggested}</p>
                 <div className="space-y-2 text-xs">
                   <div>
-                    <span className="text-slate-500">Current approach:</span>
-                    <p className="text-slate-400 mt-0.5">{imp.current}</p>
+                    <span className="text-slate-500">Current:</span>
+                    <p className="text-slate-400 mt-1">{imp.current}</p>
                   </div>
                   <div>
-                    <span className="text-amber-400 font-semibold">Impact:</span>
+                    <span className="text-amber-400 font-medium">Impact:</span>
                     <p className="text-slate-400">{imp.impact}</p>
                   </div>
                 </div>
