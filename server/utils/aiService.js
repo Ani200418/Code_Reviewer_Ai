@@ -30,6 +30,7 @@ JSON schema (ALL fields required):
   "explanation": "string",
   "edge_cases": ["string"],
   "test_cases": [{ "input": "string", "expected_output": "string" }],
+  "optimized_code": "string",
   "score": { "overall": 0, "readability": 0, "efficiency": 0, "best_practices": 0 },
   "converted_code": "string"
 }
@@ -37,6 +38,7 @@ JSON schema (ALL fields required):
 Scoring: 90-100=Excellent, 70-89=Good, 50-69=Average, 30-49=Poor, 0-29=Critical.
 Provide 3-5 bugs if any, 2-4 optimizations, 2-4 edge cases, 3-5 test cases.
 If no bugs found, return bugs: [].
+IMPORTANT: The 'optimized_code' field should contain a cleaner, more efficient version of the code addressing any issues and improvements identified. Include best practices and modern language features when applicable.
 IMPORTANT: If a 'Target Language' is specified and it differs from the original code, you MUST translate the code to the Target Language and provide the fully translated code in the 'converted_code' field. If no translation is requested or needed, leave 'converted_code' as an empty string.`;
 
 const buildPrompt = (code, language, targetLanguage) => {

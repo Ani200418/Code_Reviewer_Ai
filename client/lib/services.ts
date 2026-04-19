@@ -41,6 +41,8 @@ export interface AIResponse {
   explanation: string;
   edge_cases: string[];
   test_cases: TestCase[];
+  optimized_code?: string;
+  converted_code?: string;
   score: Score;
 }
 
