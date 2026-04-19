@@ -6,7 +6,7 @@
 const path      = require('path');
 const Review    = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
-const { executeCode, validateUTF8 } = require('../utils/codeExecutor');
+const { executeCode, validateUTF8, validateSyntax, removeComments } = require('../utils/codeExecutor');
 const { reviewCodeSchema } = require('../utils/validators');
 
 const SUPPORTED_LANGUAGES = ['javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'other'];
@@ -50,31 +50,43 @@ const reviewCode = async (req, res, next) => {
     const { code, language, fileName, targetLanguage } = value;
     const start = Date.now();
 
-    // Step 1: Try to validate/compile code first
-    const validationResult = executeCode(code, language, '');
+    // Step 1: Only validate syntax for JavaScript/TypeScript
+    // For other languages, skip syntax validation and let AI analyze
+    let executionResult = { success: true, output: '', error: null };
     
-    // Step 2: If compilation/syntax error exists, return immediately (no analysis)
-    if (!validationResult.success && validationResult.error) {
-      return res.status(400).json({
-        success: false,
-        message: 'Compilation Error',
-        data: {
-          compilationStatus: 'Error',
-          compilationError: validationResult.error,
-          errorType: 'compilation',
-          language: language,
-          fileName: fileName || null,
-          code: code,
-          suggestion: 'Please fix the syntax error above and try again.',
-        },
-      });
+    if (['javascript', 'typescript'].includes(language.toLowerCase())) {
+      // For JS/TS, validate syntax first
+      const cleanedCode = removeComments(code, language);
+      const syntaxCheck = validateSyntax(cleanedCode, language);
+      
+      if (!syntaxCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Compilation Error',
+          data: {
+            compilationStatus: 'Error',
+            compilationError: syntaxCheck.error,
+            errorType: 'compilation',
+            language: language,
+            fileName: fileName || null,
+            code: code,
+            suggestion: 'Please fix the syntax error above and try again.',
+          },
+        });
+      }
+      
+      // Execute to get output
+      executionResult = executeCode(code, language, '');
     }
 
-    // Step 3: Code is valid, proceed to AI analysis
+    // Step 2: Code is valid (or other language), proceed to AI analysis
     const aiResponse = await analyzeCode(code, language, targetLanguage);
 
-    // Step 4: Execute the code to get actual output
-    const executionResult = executeCode(code, language, '');
+    // Step 3: If we didn't execute earlier (non-JS languages), try now for output
+    if (!['javascript', 'typescript'].includes(language.toLowerCase())) {
+      executionResult = executeCode(code, language, '');
+    }
+    
     const processingTime = Date.now() - start;
 
     // Step 5: Save review with complete information
@@ -168,31 +180,43 @@ const uploadCode = async (req, res, next) => {
 
     const start = Date.now();
 
-    // Step 4: Validate code syntax first (fail fast on syntax errors)
-    const validationResult = executeCode(code, language, '');
+    // Step 4: Only validate syntax for JavaScript/TypeScript
+    // For other languages, skip syntax validation and let AI analyze
+    let executionResult = { success: true, output: '', error: null };
     
-    if (!validationResult.success && validationResult.error) {
-      return res.status(400).json({
-        success: false,
-        message: 'Compilation Error',
-        data: {
-          compilationStatus: 'Error',
-          compilationError: validationResult.error,
-          errorType: 'compilation',
-          language,
-          fileName,
-          code,
-          suggestion: 'Please fix the syntax error above and try again.',
-        },
-      });
+    if (['javascript', 'typescript'].includes(language.toLowerCase())) {
+      // For JS/TS, validate syntax first
+      const cleanedCode = removeComments(code, language);
+      const syntaxCheck = validateSyntax(cleanedCode, language);
+      
+      if (!syntaxCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Compilation Error',
+          data: {
+            compilationStatus: 'Error',
+            compilationError: syntaxCheck.error,
+            errorType: 'compilation',
+            language,
+            fileName,
+            code,
+            suggestion: 'Please fix the syntax error above and try again.',
+          },
+        });
+      }
+      
+      // Execute to get output
+      executionResult = executeCode(code, language, '');
     }
 
-    // Step 5: Code is valid, proceed to AI analysis
+    // Step 5: Code is valid (or other language), proceed to AI analysis
     const targetLanguage = req.body.targetLanguage || null;
     const aiResponse = await analyzeCode(code, language, targetLanguage);
 
-    // Step 6: Execute the code to get actual output
-    const executionResult = executeCode(code, language, '');
+    // Step 6: If we didn't execute earlier (non-JS languages), try now for output
+    if (!['javascript', 'typescript'].includes(language.toLowerCase())) {
+      executionResult = executeCode(code, language, '');
+    }
     const processingTime = Date.now() - start;
 
     // Step 7: Save review with complete information

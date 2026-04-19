@@ -256,4 +256,4 @@ const executeCode = (code, language = 'javascript', userInput = '') => {
   }
 };
 
-module.exports = { executeCode, removeComments, validateUTF8 };
+module.exports = { executeCode, removeComments, validateUTF8, validateSyntax };
