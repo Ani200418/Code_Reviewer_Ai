@@ -74,8 +74,13 @@ const CopyButton = ({ text }: { text: string }) => {
 };
 
 export default function ReviewResults({ result, processingTime }: ReviewResultsProps) {
+  // Guard against undefined result
+  if (!result) {
+    return <div className="text-slate-400 text-sm">No results available</div>;
+  }
+
   // Handle compilation error case
-  if (result.compilationStatus === 'Error' || result.compilationError) {
+  if (result?.compilationStatus === 'Error' || result?.compilationError) {
     return (
       <CompilationError
         error={result.compilationError}
