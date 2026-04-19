@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { RiSparklingLine, RiUpload2Line, RiEdit2Line, RiShareLine, RiDownload2Line } from 'react-icons/ri';
+import { RiSparklingLine, RiUpload2Line, RiEdit2Line, RiShareLine } from 'react-icons/ri';
 import { reviewService, ReviewResult } from '@/lib/services';
 import { LANGUAGE_OPTIONS, LanguageValue, extractErrorMessage } from '@/lib/utils';
 import CodeEditor from '@/components/CodeEditor';
@@ -133,7 +133,7 @@ export default function ReviewPage() {
         <div className="p-5 space-y-4">
           {/* Tabs */}
           <div className="flex gap-2">
-            {([['editor','editor','Code Editor'], ['upload','upload','Upload File']] as const).map(([val, icon, label]) => (
+            {([['editor','editor','Code Editor'], ['upload','upload','Upload File']] as const).map(([val, , label]) => (
               <button key={val} onClick={() => setTab(val as Tab)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === val ? 'text-sky-400' : 'text-slate-500 hover:text-slate-300'}`}
                 style={tab === val ? { background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.2)' } : { border: '1px solid transparent' }}>

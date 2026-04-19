@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { Score } from '@/lib/services';
 import { getScoreColor, getScoreBarColor, getScoreLabel } from '@/lib/utils';
 

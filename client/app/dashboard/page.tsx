@@ -8,11 +8,9 @@ import {
 } from 'react-icons/ri';
 import { reviewService, DashboardStats } from '@/lib/services';
 import {
-  getScoreColor, getScoreBarColor, getScoreLabel,
-  timeAgo, capitalize,
+  getScoreLabel, timeAgo, capitalize,
 } from '@/lib/utils';
 import { useAuth } from '@/lib/context/AuthContext';
-import ScoreCircle from '@/components/ScoreCircle';
 
 function StatCard({ label, value, sub, icon, accent }: {
   label: string; value: string | number; sub?: string;
@@ -64,7 +62,7 @@ export default function DashboardPage() {
             Welcome back, {user?.name?.split(' ')[0]} 👋
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Here's your code review activity at a glance.
+            Here&apos;s your code review activity at a glance.
           </p>
         </div>
         <Link href="/dashboard/review" className="btn-gradient text-sm">

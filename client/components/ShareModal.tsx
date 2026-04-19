@@ -60,6 +60,7 @@ export default function ShareModal({ reviewId, language, score, aiResponse, onCl
       explanation: aiResponse.explanation,
       edge_cases: aiResponse.edge_cases,
       test_cases: aiResponse.test_cases,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       converted_code: (aiResponse as any).converted_code,
     };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });

@@ -9,9 +9,8 @@ import {
 } from 'react-icons/ri';
 import { reviewService, ReviewHistoryItem } from '@/lib/services';
 import {
-  getScoreColor, timeAgo, capitalize, formatProcessingTime,
+  timeAgo, formatProcessingTime,
 } from '@/lib/utils';
-import ScoreCircle from '@/components/ScoreCircle';
 import ShareModal from '@/components/ShareModal';
 
 export default function HistoryPage() {
@@ -21,6 +20,7 @@ export default function HistoryPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [shareReview, setShareReview] = useState<ReviewHistoryItem | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [fullShareData, setFullShareData] = useState<any>(null);
 
   const fetchReviews = async (page = 1) => {

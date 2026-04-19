@@ -1,4 +1,4 @@
-import { RiCodeSSlashLine } from 'react-icons/ri';
+// Language icon component - emoji-based
 
 const ICONS: Record<string, string> = {
   javascript: '🟨',

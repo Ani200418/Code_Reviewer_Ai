@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   RiCodeSSlashLine, RiDashboardLine, RiHistoryLine,
-  RiMenuLine, RiCloseLine, RiLogoutBoxLine, RiUserLine,
+  RiMenuLine, RiLogoutBoxLine, RiUserLine,
   RiHeartFill, RiGithubFill,
 } from 'react-icons/ri';
 import { useAuth } from '@/lib/context/AuthContext';
