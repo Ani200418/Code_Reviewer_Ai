@@ -170,59 +170,77 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     cleanedCode = code;
   }
 
-  // Build array of API calls
-  const apiCalls = [];
+  // Build array of API calls with retry logic
+  const callWithRetry = async (apiFunc, name, retries = 2) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        console.log(`Attempt ${i + 1}/${retries} for ${name}...`);
+        const result = await apiFunc();
+        if (result) return result;
+      } catch (err) {
+        console.warn(`${name} attempt ${i + 1} failed:`, err.message);
+        if (i < retries - 1) {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+        }
+      }
+    }
+    return null;
+  };
 
-  // Primary: OpenAI (always available)
-  apiCalls.push(
-    callOpenAI(cleanedCode, language, targetLanguage)
-      .catch(err => {
-        console.warn('OpenAI API failed:', err.message);
-        throw err;
-      })
-  );
+  // Array of API calls with names
+  const apiCalls = [
+    { 
+      name: 'OpenAI', 
+      call: () => callOpenAI(cleanedCode, language, targetLanguage)
+    },
+  ];
 
-  // Secondary: Groq (if configured)
+  // Add Groq if configured
   if (process.env.GROQ_API_KEY) {
-    apiCalls.push(
-      callGroq(cleanedCode, language, targetLanguage)
-        .catch(err => {
-          console.warn('Groq API failed:', err.message);
-          throw err;
-        })
-    );
+    apiCalls.push({
+      name: 'Groq',
+      call: () => callGroq(cleanedCode, language, targetLanguage)
+    });
   }
 
   let rawContent = '';
+  const errors = [];
 
   try {
-    // Use Promise.race() to return fastest valid response
-    if (apiCalls.length > 1) {
-      console.log('Calling multiple APIs in parallel...');
-      rawContent = await Promise.race(apiCalls);
-    } else {
-      console.log('Calling primary API (OpenAI)...');
-      rawContent = await apiCalls[0];
-    }
+    // Try APIs in parallel with Promise.race for speed
+    console.log('Calling AI services in parallel...');
+    const racePromises = apiCalls.map(api => 
+      callWithRetry(api.call, api.name)
+        .catch(err => {
+          errors.push(`${api.name}: ${err.message}`);
+          return null;
+        })
+    );
 
+    rawContent = await Promise.race(
+      racePromises.filter(p => p !== null)
+    );
+
+    // If race didn't complete, try sequentially
     if (!rawContent) {
-      throw new Error('Empty response received from AI services.');
-    }
-  } catch (err) {
-    // If race fails (all promises reject), try them sequentially as fallback
-    console.warn('Promise.race failed, trying sequential fallback:', err.message);
-    for (const call of apiCalls) {
-      try {
-        rawContent = await call;
-        if (rawContent) break;
-      } catch (e) {
-        continue;
+      console.log('Parallel calls failed, trying sequential with retries...');
+      for (const api of apiCalls) {
+        rawContent = await callWithRetry(api.call, api.name, 3);
+        if (rawContent) {
+          console.log(`${api.name} succeeded on sequential attempt`);
+          break;
+        }
       }
     }
 
     if (!rawContent) {
+      console.error('All AI services failed. Errors:', errors);
       throw new Error('All AI services failed. Please try again later.');
     }
+  } catch (err) {
+    console.error('AI analysis error:', err.message);
+    throw err;
   }
 
   try {
