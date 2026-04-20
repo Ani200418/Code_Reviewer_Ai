@@ -203,7 +203,11 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
       try {
         console.log(`Attempt ${i + 1}/${retries} for ${name}...`);
         const result = await apiFunc();
-        if (result) return result;
+        // Check for null/undefined explicitly (empty string is valid JSON)
+        if (result !== null && result !== undefined && result !== '') {
+          return result;
+        }
+        console.log(`${name} attempt ${i + 1} returned empty, retrying...`);
       } catch (err) {
         console.warn(`${name} attempt ${i + 1} failed:`, err.message);
         if (i < retries - 1) {
@@ -212,6 +216,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
         }
       }
     }
+    console.warn(`${name}: All ${retries} retries exhausted, returning null`);
     return null;
   };
 
@@ -251,11 +256,13 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     const apiPromises = apiCalls.map(async (api) => {
       try {
         const result = await callWithRetry(api.call, api.name, 2);
-        if (result) {
+        // Check for null/undefined explicitly (empty string is still a failed response)
+        if (result && result.trim && result.trim().length > 0) {
           console.log(`[AI] ✅ ${api.name} succeeded`);
           return { success: true, apiName: api.name, result };
         }
         errors.push(`${api.name}: returned empty response`);
+        console.warn(`[AI] ${api.name} returned empty response`);
         return { success: false, apiName: api.name };
       } catch (err) {
         const errMsg = err.message || String(err);
