@@ -47,21 +47,28 @@ router.post('/analyze', protect, aiRateLimiter, async (req, res, next) => {
     }
 
     const { code, language } = value;
+    console.log(`[API] /analyze request: language=${language}, codeLength=${code.length}`);
 
     // Step 1: Execute code in Docker sandbox
+    console.log(`[Docker] Starting execution for ${language}`);
     const execution = await runCode(code, language);
+    console.log(`[Docker] Execution result: success=${execution.success}, outputLength=${execution.output?.length || 0}`);
 
-    // Step 2: If execution fails, return error
+    // Step 2: If execution fails, still try analysis (AI can provide insights)
     if (!execution.success) {
+      console.log(`[Docker] Execution error: ${execution.error}`);
       return res.status(400).json({
         success: false,
-        message: 'Execution failed',
+        message: 'Code execution failed',
         error: execution.error,
+        language,
       });
     }
 
     // Step 3: Execute succeeded, now get AI analysis
+    console.log(`[AI] Starting analysis for ${language}`);
     const analysis = await analyzeCode(code, language);
+    console.log(`[AI] Analysis complete: score=${analysis.score.overall}`);
 
     // Step 4: Return combined response
     res.status(200).json({
@@ -70,6 +77,7 @@ router.post('/analyze', protect, aiRateLimiter, async (req, res, next) => {
       analysis,
     });
   } catch (err) {
+    console.error('[API] Error in /analyze:', err.message);
     next(err);
   }
 });

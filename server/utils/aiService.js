@@ -244,7 +244,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
 
   try {
     // Try APIs in parallel with Promise.race for speed
-    console.log('Calling AI services in parallel...');
+    console.log(`[AI] Starting analysis for ${language} code (${cleanedCode.length} chars)`);
     const racePromises = apiCalls.map(api => 
       callWithRetry(api.call, api.name)
         .catch(err => {
@@ -253,32 +253,34 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
         })
     );
 
-    rawContent = await Promise.race(
-      racePromises.filter(p => p !== null)
-    );
+    const validPromises = racePromises.filter(p => p !== null);
+    if (validPromises.length === 0) {
+      throw new Error('No AI services configured. Please set at least OPENAI_API_KEY.');
+    }
+
+    rawContent = await Promise.race(validPromises);
 
     // If race didn't complete, try sequentially
     if (!rawContent) {
-      console.log('Parallel calls failed, trying sequential with retries...');
+      console.log('[AI] Parallel calls failed, trying sequential with retries...');
       for (const api of apiCalls) {
         rawContent = await callWithRetry(api.call, api.name, 3);
         if (rawContent) {
-          console.log(`${api.name} succeeded on sequential attempt`);
+          console.log(`[AI] ✅ ${api.name} succeeded on sequential attempt`);
           break;
         }
       }
     }
 
     if (!rawContent) {
-      console.error('All AI services failed. Errors:', errors);
-      console.log('Using fallback basic code analysis...');
-      // Fallback: Basic analysis without external API
-      return fallbackAnalysis(code, language);
+      console.error('[AI] All API services exhausted without response');
+      throw new Error('All AI services failed after retries. Please check API keys and quotas.');
     }
+
+    console.log(`[AI] Got response from one of the services (${rawContent.length} chars)`);
   } catch (err) {
-    console.error('AI analysis error:', err.message);
-    console.log('Falling back to basic analysis...');
-    return fallbackAnalysis(code, language);
+    console.error('[AI] Analysis error:', err.message);
+    throw err;
   }
 
   try {
@@ -307,70 +309,6 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     }
     throw err;
   }
-};
-
-// ─── Fallback Analyzer ────────────────────────────────────────────────────────
-
-const fallbackAnalysis = (code, language) => {
-  // Basic pattern-based analysis when APIs fail
-  const issues = [];
-  const improvements = [];
-  const lines = code.split('\n');
-  
-  // Check for common issues
-  if (code.match(/console\.log/g)) {
-    issues.push({
-      severity: 'medium',
-      type: 'style',
-      description: 'Debug console.log statements should be removed before production',
-      line: 'various',
-      suggestion: 'Remove or use proper logging framework',
-    });
-  }
-  
-  if (code.match(/var\s+/g) && language === 'javascript') {
-    issues.push({
-      severity: 'medium',
-      type: 'style',
-      description: 'Use const/let instead of var for better scoping',
-      line: 'various',
-      suggestion: 'Replace var with const or let',
-    });
-  }
-  
-  if (code.length > 1000) {
-    improvements.push({
-      area: 'maintainability',
-      current: 'Large code block without structure',
-      suggested: 'Break into smaller, well-named functions',
-      impact: 'Improved readability and testability',
-    });
-  }
-  
-  if (!code.includes('error') && !code.includes('catch') && !code.includes('try')) {
-    improvements.push({
-      area: 'best_practices',
-      current: 'No error handling',
-      suggested: 'Add try-catch or error handling',
-      impact: 'Better reliability and debugging',
-    });
-  }
-  
-  return sanitizeResponse({
-    issues,
-    improvements,
-    optimized_code: code, // Return original when no AI available
-    explanation: `Basic analysis mode (APIs unavailable). Code appears to be ${language} with ${lines.length} lines.`,
-    edge_cases: [],
-    test_cases: [],
-    score: {
-      overall: 65,
-      readability: 70,
-      efficiency: 60,
-      best_practices: 60,
-    },
-    converted_code: '',
-  });
 };
 
 // ─── Sanitizer ────────────────────────────────────────────────────────────────
