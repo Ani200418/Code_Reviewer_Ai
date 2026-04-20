@@ -144,7 +144,15 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
     ],
   });
 
-  return response.choices[0]?.message?.content?.trim() || '';
+  const content = response.choices[0]?.message?.content?.trim() || '';
+  if (!content) {
+    console.error('[OpenAI] Empty response received:', { 
+      status: response.status,
+      choices: response.choices?.length,
+      content: response.choices[0]?.message?.content 
+    });
+  }
+  return content;
 };
 
 // ─── Call Groq API ──────────────────────────────────────────────────────────
@@ -164,7 +172,15 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
     ],
   });
 
-  return response.choices[0]?.message?.content?.trim() || '';
+  const content = response.choices[0]?.message?.content?.trim() || '';
+  if (!content) {
+    console.error('[Groq] Empty response received:', { 
+      status: response.status,
+      choices: response.choices?.length,
+      content: response.choices[0]?.message?.content 
+    });
+  }
+  return content;
 };
 
 // ─── Call Gemini API ────────────────────────────────────────────────────────
@@ -181,7 +197,15 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
   
   // Extract JSON from response
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  return jsonMatch ? jsonMatch[0].trim() : '';
+  const content = jsonMatch ? jsonMatch[0].trim() : '';
+  
+  if (!content) {
+    console.error('[Gemini] Empty response received:', { 
+      responseText: text?.substring(0, 200),
+      matchFound: !!jsonMatch
+    });
+  }
+  return content;
 };
 
 const analyzeCode = async (code, language, targetLanguage = null) => {
@@ -289,10 +313,12 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
       for (const api of apiCalls) {
         try {
           rawContent = await callWithRetry(api.call, api.name, 3);
-          if (rawContent) {
+          // Properly check for non-empty string
+          if (rawContent && typeof rawContent === 'string' && rawContent.trim().length > 0) {
             console.log(`[AI] ✅ Sequential: ${api.name} succeeded`);
             break;
           }
+          console.log(`[AI] Sequential ${api.name} returned empty, trying next...`);
         } catch (err) {
           console.warn(`[AI] Sequential ${api.name} failed:`, err.message);
         }
