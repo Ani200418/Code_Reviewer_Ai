@@ -129,31 +129,39 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
           </div>
         ) : (
           <div className="space-y-4">
-            {result.issues.map((issue: any, i: number) => (
-              <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-start gap-2">
-                    <span
-                      className="px-2 py-0.5 rounded text-xs font-bold flex-shrink-0"
-                      style={{
-                        background: issue.severity === 'high' ? 'rgba(239,68,68,0.2)' : issue.severity === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(56,189,248,0.2)',
-                        color: issue.severity === 'high' ? '#f87171' : issue.severity === 'medium' ? '#fbbf24' : '#38bdf8'
-                      }}
-                    >
-                      {issue.severity.toUpperCase()}
-                    </span>
-                    <div>
-                      <p className="text-red-300 font-medium text-sm">{issue.description}</p>
-                      <p className="text-xs text-slate-500 mt-1">Type: {issue.type}</p>
+            {result.issues.map((issue: any, i: number) => {
+              // Handle both field mappings: (severity/description) or (issue/explanation)
+              const severity = issue.severity || 'medium';
+              const description = issue.description || issue.issue || 'Unknown issue';
+              const type = issue.type || 'bug';
+              const suggestion = issue.suggestion || issue.explanation || '';
+              
+              return (
+                <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="px-2 py-0.5 rounded text-xs font-bold flex-shrink-0"
+                        style={{
+                          background: severity === 'high' ? 'rgba(239,68,68,0.2)' : severity === 'medium' ? 'rgba(245,158,11,0.2)' : 'rgba(56,189,248,0.2)',
+                          color: severity === 'high' ? '#f87171' : severity === 'medium' ? '#fbbf24' : '#38bdf8'
+                        }}
+                      >
+                        {String(severity).toUpperCase()}
+                      </span>
+                      <div>
+                        <p className="text-red-300 font-medium text-sm">{description}</p>
+                        <p className="text-xs text-slate-500 mt-1">Type: {type}</p>
+                      </div>
                     </div>
                   </div>
+                  <div className="pl-20">
+                    <p className="text-xs font-semibold text-slate-500 mb-1">Fix:</p>
+                    <p className="text-slate-400 text-sm">{suggestion}</p>
+                  </div>
                 </div>
-                <div className="pl-20">
-                  <p className="text-xs font-semibold text-slate-500 mb-1">Fix:</p>
-                  <p className="text-slate-400 text-sm">{issue.suggestion}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </SectionCard>
@@ -169,23 +177,35 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
           <p className="text-slate-400 text-sm">Code is already well-optimized.</p>
         ) : (
           <div className="space-y-4">
-            {result.improvements.map((imp: any, i: number) => (
-              <div key={i} className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
-                <p className="text-amber-300 font-medium text-sm mb-2">
-                  {imp.area.charAt(0).toUpperCase() + imp.area.slice(1)}: {imp.suggested}
-                </p>
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <span className="text-slate-500">Current:</span>
-                    <p className="text-slate-400 mt-0.5">{imp.current}</p>
-                  </div>
-                  <div>
-                    <span className="text-amber-400 font-medium">Impact:</span>
-                    <p className="text-slate-400">{imp.impact}</p>
-                  </div>
+            {result.improvements.map((imp: any, i: number) => {
+              // Handle both field mappings: (area/current/suggested) or (suggestion/impact)
+              const area = imp.area || 'general';
+              const suggestion = imp.suggested || imp.suggestion || '';
+              const current = imp.current || '';
+              const impact = imp.impact || '';
+              
+              return (
+                <div key={i} className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
+                  <p className="text-amber-300 font-medium text-sm mb-2">
+                    {String(area).charAt(0).toUpperCase() + String(area).slice(1)}: {suggestion}
+                  </p>
+                  {current && (
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <span className="text-slate-500">Current:</span>
+                        <p className="text-slate-400 mt-0.5">{current}</p>
+                      </div>
+                    </div>
+                  )}
+                  {impact && (
+                    <div className="text-xs">
+                      <span className="text-amber-400 font-medium">Impact:</span>
+                      <p className="text-slate-400">{impact}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </SectionCard>
