@@ -47,27 +47,12 @@ const getGeminiClient = () => {
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a code quality expert. Analyze code briefly and provide ONLY valid JSON.
-
-SCHEMA: {
-  "issues": [{"severity":"high|medium|low","type":"bug|performance|security|style","description":"","suggestion":""}],
-  "improvements": [{"area":"readability|efficiency|maintainability|best_practices","current":"","suggested":"","impact":""}],
-  "optimized_code": "improved code",
-  "explanation": "brief summary",
-  "edge_cases": [],
-  "test_cases": [{"description":"","input":"","expected_output":""}],
-  "score": {"overall":0,"readability":0,"efficiency":0,"best_practices":0},
-  "converted_code": ""
-}
-
-IMPORTANT: Return ONLY JSON, no text before or after.`;
+const SYSTEM_PROMPT = `Analyze code. Return ONLY JSON (no text):
+{"issues":[{"d":"problem description","fix":"solution"}],"improvements":[{"s":"suggestion","impact":"effect"}],"optimized_code":"code","explanation":"brief summary","score":{"o":0,"r":0,"e":0,"b":0}}`;
 
 const buildPrompt = (code, language, targetLanguage) => {
-  const targetText = targetLanguage 
-    ? `Translate to: ${targetLanguage.toUpperCase()}`
-    : '';
-  
-  return `LANG: ${language}\n${targetText}\n\nCODE:\n\`\`\`\n${code}\n\`\`\`\n\nAnalyze. Return JSON only.`;
+  const target = targetLanguage ? ` to ${targetLanguage}` : '';
+  return `${language}${target}\n\`\`\`\n${code}\n\`\`\``;
 };
 
 // ─── Call OpenAI API ─────────────────────────────────────────────────────────
@@ -81,8 +66,8 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
   try {
     const response = await client.chat.completions.create({
       model,
-      max_tokens: 4000,
-      temperature: 0.2,
+      max_tokens: 1500,
+      temperature: 0.1,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -110,8 +95,8 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
   try {
     const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      max_tokens: 4000,
-      temperature: 0.2,
+      max_tokens: 1200,
+      temperature: 0.1,
       // NOTE: Groq doesn't support response_format yet, so we request JSON in the prompt instead
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -372,51 +357,40 @@ const sanitizeResponse = (raw) => {
   const str = (v) => String(v || '').slice(0, 5000);
   const largeStr = (v) => String(v || '');
 
-  // STRICT VALIDATION: optimized_code is mandatory
+  // Map shortened field names from optimized prompt to schema names
   const optimizedCode = largeStr(raw.optimized_code);
-  if (!optimizedCode || optimizedCode.trim().length === 0) {
-    console.warn('WARNING: AI response missing optimized_code. This should not happen!');
-    // Fallback: use original code or create basic optimized version
-    // In production, this should trigger a retry with the AI
-  }
 
   return {
+    // Schema expects: issues = [{issue, explanation}]
     issues: Array.isArray(raw.issues)
       ? raw.issues.slice(0, 15).map((i) => ({
-          severity: String(i.severity || 'medium').toLowerCase(),
-          type: String(i.type || 'bug').toLowerCase(),
-          description: str(i.description),
-          line: str(i.line),
-          suggestion: str(i.suggestion),
+          issue: str(i.d || i.description || i.issue),
+          explanation: str(i.fix || i.suggestion || i.explanation),
         }))
       : [],
+    // Schema expects: improvements = [{suggestion, impact}]
     improvements: Array.isArray(raw.improvements)
       ? raw.improvements.slice(0, 15).map((imp) => ({
-          area: String(imp.area || 'readability').toLowerCase(),
-          current: str(imp.current),
-          suggested: str(imp.suggested),
+          suggestion: str(imp.s || imp.suggested || imp.suggestion),
           impact: str(imp.impact),
         }))
       : [],
-    optimized_code: optimizedCode,  // ✅ MANDATORY FIELD - Always present
-    explanation: str(raw.explanation),
-    edge_cases: Array.isArray(raw.edge_cases)
-      ? raw.edge_cases.slice(0, 10).map(str)
-      : [],
+    optimized_code: optimizedCode || '',
+    explanation: str(raw.explanation || 'Code analysis complete'),
+    edge_cases: Array.isArray(raw.edge_cases) ? raw.edge_cases.slice(0, 10).map(str) : [],
     test_cases: Array.isArray(raw.test_cases)
       ? raw.test_cases.slice(0, 10).map((t) => ({
-          description: str(t.description),
-          input: str(t.input),
-          expected_output: str(t.expected_output),
+          input: str(t.input || t.i || ''),
+          expected_output: str(t.expected_output || t.o || ''),
         }))
       : [],
     score: {
-      overall:       clamp(raw.score?.overall),
-      readability:   clamp(raw.score?.readability),
-      efficiency:    clamp(raw.score?.efficiency),
-      best_practices: clamp(raw.score?.best_practices),
+      overall:       clamp(raw.score?.o ?? raw.score?.overall ?? 0),
+      readability:   clamp(raw.score?.r ?? raw.score?.readability ?? 0),
+      efficiency:    clamp(raw.score?.e ?? raw.score?.efficiency ?? 0),
+      best_practices: clamp(raw.score?.b ?? raw.score?.best_practices ?? 0),
     },
-    converted_code: largeStr(raw.converted_code),
+    converted_code: largeStr(raw.converted_code || ''),
   };
 };
 

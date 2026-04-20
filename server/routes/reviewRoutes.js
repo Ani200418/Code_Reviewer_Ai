@@ -41,13 +41,20 @@ const upload = multer({
   },
 });
 
-// ── Public ────────────────────────────────────────────────────────────────────
-router.get('/review/:id/public', getPublicReview);
-
 // ── Protected ─────────────────────────────────────────────────────────────────
 router.use(protect);
 
 router.post('/review-code',  aiRateLimiter, reviewCode);
+router.post('/upload-code',  aiRateLimiter, upload.single('file'), uploadCode);
+
+// Protected review endpoints (must come before :id route)
+router.get('/reviews',      getReviews);
+router.get('/reviews/stats', getStats);
+router.delete('/reviews/:id', deleteReview);
+router.get('/reviews/:id',  getReviewById);
+
+// ── Public (must come last to avoid matching :id) ──────────────────────────────
+router.get('/review/:id/public', getPublicReview);
 router.post('/upload-code',  aiRateLimiter, upload.single('file'), uploadCode);
 
 // Order matters: /reviews/stats must come before /reviews/:id
