@@ -100,6 +100,20 @@ app.get('/health', (req, res) =>
   })
 );
 
+/* ================= ROOT ================= */
+app.get('/', (req, res) =>
+  res.json({
+    message: 'AI Code Reviewer API',
+    version: '2.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth/login',
+      review: '/api/review-code',
+      analyze: '/api/analyze',
+    },
+  })
+);
+
 /* ================= ROUTES ================= */
 app.use('/api/auth', authRoutes);
 app.use('/api', analyzeRoutes);

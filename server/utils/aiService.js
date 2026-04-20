@@ -173,7 +173,7 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
   const client = getGeminiClient();
   if (!client) throw new Error('Gemini API key not configured');
 
-  const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
   const prompt = `${SYSTEM_PROMPT}\n\n${buildPrompt(cleanedCode, language, targetLanguage)}`;
   
   const result = await model.generateContent(prompt);

@@ -109,6 +109,15 @@ const runCode = (code, language) => {
 
         // Handle execution errors
         if (error) {
+          // Docker not found on serverless platform
+          if (error.message.includes('docker: not found') || error.code === 'ENOENT') {
+            console.warn(`[Docker] Not available on this platform for ${language}`);
+            // Return success with empty output (AI will analyze without execution)
+            return resolve({
+              success: true,
+              output: '',
+            });
+          }
           // Timeout error
           if (error.killed) {
             console.warn(`[Docker] Timeout for ${language}`);
