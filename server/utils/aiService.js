@@ -128,16 +128,22 @@ Analyze this code thoroughly. Provide detailed issues, improvements, and a compl
 };
 
 // ─── Call OpenAI API ─────────────────────────────────────────────────────────
+// DISABLED - Account has no credits
+// const callOpenAI = async (cleanedCode, language, targetLanguage) => {
+//   ... removed for free tier ...
+// };
 
-const callOpenAI = async (cleanedCode, language, targetLanguage) => {
-  const client = getOpenAIClient();
-  const model = process.env.OPENAI_MODEL || 'gpt-4o';
+// ─── Call Groq API ──────────────────────────────────────────────────────────
 
-  console.log(`[OpenAI] Calling ${model}...`);
+const callGroq = async (cleanedCode, language, targetLanguage) => {
+  const client = getGroqClient();
+  if (!client) throw new Error('Groq API key not configured');
+
+  console.log(`[Groq] Calling llama-3.3-70b-versatile...`);
   
   try {
     const response = await client.chat.completions.create({
-      model,
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 4000,
       temperature: 0.2,
       response_format: { type: 'json_object' },
@@ -147,53 +153,25 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
       ],
     });
 
-    console.log(`[OpenAI] Response status: ${response.status || 'ok'}`);
-    console.log(`[OpenAI] Choices count: ${response.choices?.length}`);
+    console.log(`[Groq] Response status: ${response.status || 'ok'}`);
+    console.log(`[Groq] Choices count: ${response.choices?.length}`);
     
     const content = response.choices[0]?.message?.content;
-    console.log(`[OpenAI] Raw content length: ${content?.length || 0}`);
-    console.log(`[OpenAI] Raw content preview: ${content?.substring(0, 100)}`);
+    console.log(`[Groq] Raw content length: ${content?.length || 0}`);
+    console.log(`[Groq] Raw content preview: ${content?.substring(0, 100)}`);
     
     if (!content) {
-      console.error('[OpenAI] ❌ No content in response!');
+      console.error('[Groq] ❌ No content in response!');
       return '';
     }
     
     const trimmed = content.trim();
-    console.log(`[OpenAI] ✅ Got response (${trimmed.length} chars)`);
+    console.log(`[Groq] ✅ Got response (${trimmed.length} chars)`);
     return trimmed;
   } catch (err) {
-    console.error(`[OpenAI] 💥 Error:`, err.message);
+    console.error(`[Groq] 💥 Error:`, err.message);
     throw err;
   }
-};
-
-// ─── Call Groq API ──────────────────────────────────────────────────────────
-
-const callGroq = async (cleanedCode, language, targetLanguage) => {
-  const client = getGroqClient();
-  if (!client) throw new Error('Groq API key not configured');
-
-  const response = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    max_tokens: 4000,
-    temperature: 0.2,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
-    ],
-  });
-
-  const content = response.choices[0]?.message?.content?.trim() || '';
-  if (!content) {
-    console.error('[Groq] Empty response received:', { 
-      status: response.status,
-      choices: response.choices?.length,
-      content: response.choices[0]?.message?.content 
-    });
-  }
-  return content;
 };
 
 // ─── Call Gemini API ────────────────────────────────────────────────────────
@@ -202,23 +180,33 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
   const client = getGeminiClient();
   if (!client) throw new Error('Gemini API key not configured');
 
-  const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
-  const prompt = `${SYSTEM_PROMPT}\n\n${buildPrompt(cleanedCode, language, targetLanguage)}`;
+  console.log(`[Gemini] Calling gemini-2.0-flash...`);
   
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  
-  // Extract JSON from response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  const content = jsonMatch ? jsonMatch[0].trim() : '';
-  
-  if (!content) {
-    console.error('[Gemini] Empty response received:', { 
-      responseText: text?.substring(0, 200),
-      matchFound: !!jsonMatch
-    });
+  try {
+    const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `${SYSTEM_PROMPT}\n\n${buildPrompt(cleanedCode, language, targetLanguage)}`;
+    
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    
+    console.log(`[Gemini] Response length: ${text?.length || 0}`);
+    console.log(`[Gemini] Response preview: ${text?.substring(0, 100)}`);
+    
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const content = jsonMatch ? jsonMatch[0].trim() : '';
+    
+    if (!content) {
+      console.error('[Gemini] ❌ No JSON found in response!');
+      return '';
+    }
+    
+    console.log(`[Gemini] ✅ Got response (${content.length} chars)`);
+    return content;
+  } catch (err) {
+    console.error(`[Gemini] 💥 Error:`, err.message);
+    throw err;
   }
-  return content;
 };
 
 const analyzeCode = async (code, language, targetLanguage = null) => {
@@ -262,32 +250,34 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   };
 
   // Array of API calls with names
+  // Using FREE tier APIs only: Groq + Gemini
   const apiCalls = [
-    { 
-      name: 'OpenAI', 
-      call: () => callOpenAI(cleanedCode, language, targetLanguage)
+    // Try Groq first (free tier, generous limits)
+    {
+      name: 'Groq',
+      call: () => callGroq(cleanedCode, language, targetLanguage)
+    },
+    // Try Gemini as fallback (free tier available)
+    {
+      name: 'Gemini',
+      call: () => callGemini(cleanedCode, language, targetLanguage)
     },
   ];
 
-  // Skip Groq and Gemini for now - focus on OpenAI only for speed
-  // Will add back once debugging is complete
-  /*
-  // Add Groq if configured
-  if (process.env.GROQ_API_KEY) {
-    apiCalls.push({
-      name: 'Groq',
-      call: () => callGroq(cleanedCode, language, targetLanguage)
-    });
-  }
-
-  // Add Gemini if configured
-  if (process.env.GEMINI_API_KEY) {
-    apiCalls.push({
-      name: 'Gemini',
-      call: () => callGemini(cleanedCode, language, targetLanguage)
-    });
-  }
-  */
+  // Filter out APIs without keys
+  const finalApiCalls = apiCalls.filter(api => {
+    if (api.name === 'Groq' && !process.env.GROQ_API_KEY) {
+      console.warn('[AI] ⚠️  Groq API key not configured, skipping');
+      return false;
+    }
+    if (api.name === 'Gemini' && !process.env.GEMINI_API_KEY) {
+      console.warn('[AI] ⚠️  Gemini API key not configured, skipping');
+      return false;
+    }
+    return true;
+  });
+  
+  console.log(`[AI] Active FREE APIs: ${finalApiCalls.map(a => a.name).join(', ')}`);
 
   let rawContent = '';
   const errors = [];
@@ -297,11 +287,11 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`[AI] 🚀 Starting analysis for ${language} code`);
     console.log(`[AI] Code size: ${cleanedCode.length} chars`);
-    console.log(`[AI] Available APIs: ${apiCalls.map(a => a.name).join(', ')}`);
+    console.log(`[AI] Available APIs: ${finalApiCalls.map(a => a.name).join(', ')}`);
     console.log(`${'='.repeat(60)}\n`);
     
     // Call all APIs with timeout and retry
-    const apiPromises = apiCalls.map(async (api) => {
+    const apiPromises = finalApiCalls.map(async (api) => {
       try {
         console.log(`[API] Calling ${api.name}...`);
         const result = await callWithRetry(api.call, api.name, 2);
@@ -339,7 +329,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     // If parallel failed, try sequentially with longer retries
     if (!rawContent) {
       console.log(`[AI] ⚠️  Parallel attempts failed, trying sequential with more retries...`);
-      for (const api of apiCalls) {
+      for (const api of finalApiCalls) {
         try {
           console.log(`[AI] 🔄 Sequential attempt for ${api.name}...`);
           rawContent = await callWithRetry(api.call, api.name, 3);
