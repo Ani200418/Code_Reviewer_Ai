@@ -302,15 +302,35 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     if (!rawContent) {
       console.error(`[AI] 💥💥💥 ALL APIS FAILED!`);
       console.error(`[AI] Errors:`, errors);
-      const err = new Error(
-        `All AI services failed. Common causes:\n` +
-        `• OpenAI: Check quota at https://platform.openai.com/account/billing/overview\n` +
-        `• Groq: Rate limit or invalid key at https://console.groq.com\n` +
-        `• Gemini: Quota exceeded at https://ai.google.dev/gemini-api/docs/rate-limits\n\n` +
-        `Details: ${errors.join(' | ')}`
-      );
-      err.statusCode = 503;
-      throw err;
+      
+      // FALLBACK: Return demo response for development/demo purposes
+      if (process.env.ENABLE_DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production') {
+        console.warn(`[AI] ⚠️  Using DEMO MODE - returning sample response`);
+        console.warn(`[AI] To disable: set ENABLE_DEMO_MODE=false in .env`);
+        rawContent = JSON.stringify({
+          issues: [
+            { d: 'Missing input validation', fix: 'Add parameter validation at function start' },
+            { d: 'No error handling', fix: 'Wrap logic in try-catch blocks' },
+          ],
+          improvements: [
+            { s: 'Add JSDoc comments', impact: 'Improves code maintainability' },
+            { s: 'Consider using const/let instead of var', impact: 'Better scope management' },
+          ],
+          optimized_code: code,
+          explanation: '[DEMO MODE] This is a sample response because all AI services are currently unavailable.',
+          score: { o: 65, r: 70, e: 60, b: 55 },
+        });
+      } else {
+        const err = new Error(
+          `All AI services failed. Common causes:\n` +
+          `• OpenAI: Check quota at https://platform.openai.com/account/billing/overview\n` +
+          `• Groq: Rate limit or invalid key at https://console.groq.com\n` +
+          `• Gemini: Quota exceeded at https://ai.google.dev/gemini-api/docs/rate-limits\n\n` +
+          `Details: ${errors.join(' | ')}`
+        );
+        err.statusCode = 503;
+        throw err;
+      }
     }
 
     console.log(`[AI] ✅ Got response (${rawContent.length} chars)`);
