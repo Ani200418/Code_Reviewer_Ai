@@ -133,26 +133,39 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
   const client = getOpenAIClient();
   const model = process.env.OPENAI_MODEL || 'gpt-4o';
 
-  const response = await client.chat.completions.create({
-    model,
-    max_tokens: 4000,
-    temperature: 0.2,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
-    ],
-  });
-
-  const content = response.choices[0]?.message?.content?.trim() || '';
-  if (!content) {
-    console.error('[OpenAI] Empty response received:', { 
-      status: response.status,
-      choices: response.choices?.length,
-      content: response.choices[0]?.message?.content 
+  console.log(`[OpenAI] Calling ${model}...`);
+  
+  try {
+    const response = await client.chat.completions.create({
+      model,
+      max_tokens: 4000,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
+      ],
     });
+
+    console.log(`[OpenAI] Response status: ${response.status || 'ok'}`);
+    console.log(`[OpenAI] Choices count: ${response.choices?.length}`);
+    
+    const content = response.choices[0]?.message?.content;
+    console.log(`[OpenAI] Raw content length: ${content?.length || 0}`);
+    console.log(`[OpenAI] Raw content preview: ${content?.substring(0, 100)}`);
+    
+    if (!content) {
+      console.error('[OpenAI] ❌ No content in response!');
+      return '';
+    }
+    
+    const trimmed = content.trim();
+    console.log(`[OpenAI] ✅ Got response (${trimmed.length} chars)`);
+    return trimmed;
+  } catch (err) {
+    console.error(`[OpenAI] 💥 Error:`, err.message);
+    throw err;
   }
-  return content;
 };
 
 // ─── Call Groq API ──────────────────────────────────────────────────────────
@@ -225,22 +238,26 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   const callWithRetry = async (apiFunc, name, retries = 2) => {
     for (let i = 0; i < retries; i++) {
       try {
-        console.log(`Attempt ${i + 1}/${retries} for ${name}...`);
+        console.log(`\n[${name}] 🔄 Attempt ${i + 1}/${retries}...`);
         const result = await apiFunc();
-        // Check for null/undefined explicitly (empty string is valid JSON)
+        console.log(`[${name}] Result length: ${result?.length || 0}`);
+        
         if (result !== null && result !== undefined && result !== '') {
+          console.log(`[${name}] ✅ SUCCESS - Got response`);
           return result;
         }
-        console.log(`${name} attempt ${i + 1} returned empty, retrying...`);
+        
+        console.log(`[${name}] ⚠️  Got empty response, will retry...`);
       } catch (err) {
-        console.warn(`${name} attempt ${i + 1} failed:`, err.message);
+        console.error(`[${name}] ❌ Error on attempt ${i + 1}:`, err.message);
         if (i < retries - 1) {
-          // Wait before retry (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+          const waitTime = 1000 * Math.pow(2, i);
+          console.log(`[${name}] ⏳ Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
     }
-    console.warn(`${name}: All ${retries} retries exhausted, returning null`);
+    console.error(`[${name}] 💥 All ${retries} retries exhausted!`);
     return null;
   };
 
@@ -252,6 +269,9 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     },
   ];
 
+  // Skip Groq and Gemini for now - focus on OpenAI only for speed
+  // Will add back once debugging is complete
+  /*
   // Add Groq if configured
   if (process.env.GROQ_API_KEY) {
     apiCalls.push({
@@ -267,66 +287,78 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
       call: () => callGemini(cleanedCode, language, targetLanguage)
     });
   }
+  */
 
   let rawContent = '';
   const errors = [];
 
   try {
     // Try APIs in parallel with Promise.allSettled for robust handling
-    console.log(`[AI] Starting analysis for ${language} code (${cleanedCode.length} chars)`);
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`[AI] 🚀 Starting analysis for ${language} code`);
+    console.log(`[AI] Code size: ${cleanedCode.length} chars`);
     console.log(`[AI] Available APIs: ${apiCalls.map(a => a.name).join(', ')}`);
+    console.log(`${'='.repeat(60)}\n`);
     
     // Call all APIs with timeout and retry
     const apiPromises = apiCalls.map(async (api) => {
       try {
+        console.log(`[API] Calling ${api.name}...`);
         const result = await callWithRetry(api.call, api.name, 2);
-        // Check for null/undefined explicitly (empty string is still a failed response)
+        
+        // Check for null/undefined explicitly
         if (result && result.trim && result.trim().length > 0) {
-          console.log(`[AI] ✅ ${api.name} succeeded`);
+          console.log(`[API] ✅ ${api.name} returned valid response`);
           return { success: true, apiName: api.name, result };
         }
+        
+        console.log(`[API] ❌ ${api.name} returned empty response`);
         errors.push(`${api.name}: returned empty response`);
-        console.warn(`[AI] ${api.name} returned empty response`);
         return { success: false, apiName: api.name };
       } catch (err) {
         const errMsg = err.message || String(err);
+        console.error(`[API] 💥 ${api.name} error:`, errMsg);
         errors.push(`${api.name}: ${errMsg}`);
-        console.warn(`[AI] ${api.name} failed: ${errMsg}`);
         return { success: false, apiName: api.name, error: errMsg };
       }
     });
 
     // Use allSettled to get results from all APIs, then pick first successful
+    console.log(`[AI] 📡 Waiting for API responses...`);
     const results = await Promise.allSettled(apiPromises);
     
+    console.log(`[AI] 📊 Got ${results.length} results`);
     for (const result of results) {
       if (result.status === 'fulfilled' && result.value?.success && result.value?.result) {
         rawContent = result.value.result;
-        console.log(`[AI] ✅ Using response from ${result.value.apiName}`);
+        console.log(`[AI] ✅✅✅ Using response from ${result.value.apiName}`);
         break;
       }
     }
 
     // If parallel failed, try sequentially with longer retries
     if (!rawContent) {
-      console.log('[AI] Parallel attempts exhausted, trying sequential with more retries...');
+      console.log(`[AI] ⚠️  Parallel attempts failed, trying sequential with more retries...`);
       for (const api of apiCalls) {
         try {
+          console.log(`[AI] 🔄 Sequential attempt for ${api.name}...`);
           rawContent = await callWithRetry(api.call, api.name, 3);
-          // Properly check for non-empty string
+          
           if (rawContent && typeof rawContent === 'string' && rawContent.trim().length > 0) {
-            console.log(`[AI] ✅ Sequential: ${api.name} succeeded`);
+            console.log(`[AI] ✅✅✅ Sequential: ${api.name} succeeded`);
             break;
           }
+          
           console.log(`[AI] Sequential ${api.name} returned empty, trying next...`);
         } catch (err) {
-          console.warn(`[AI] Sequential ${api.name} failed:`, err.message);
+          console.error(`[AI] Sequential ${api.name} failed:`, err.message);
         }
       }
     }
 
     if (!rawContent) {
-      console.error('[AI] All APIs exhausted. Errors:', errors);
+      console.error(`[AI] 💥💥💥 ALL APIS FAILED!`);
+      console.error(`[AI] Errors:`, errors);
       const err = new Error(
         `All AI services failed. Common causes:\n` +
         `• OpenAI: Check quota at https://platform.openai.com/account/billing/overview\n` +
@@ -338,7 +370,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
       throw err;
     }
 
-    console.log(`[AI] Got response (${rawContent.length} chars)`);
+    console.log(`[AI] ✅ Got response (${rawContent.length} chars)`);
   } catch (err) {
     console.error('[AI] Analysis error:', err.message);
     if (!err.statusCode) {
