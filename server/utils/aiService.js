@@ -271,11 +271,14 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
 
     if (!rawContent) {
       console.error('All AI services failed. Errors:', errors);
-      throw new Error('All AI services failed. Please try again later.');
+      console.log('Using fallback basic code analysis...');
+      // Fallback: Basic analysis without external API
+      return fallbackAnalysis(code, language);
     }
   } catch (err) {
     console.error('AI analysis error:', err.message);
-    throw err;
+    console.log('Falling back to basic analysis...');
+    return fallbackAnalysis(code, language);
   }
 
   try {
@@ -304,6 +307,70 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     }
     throw err;
   }
+};
+
+// ─── Fallback Analyzer ────────────────────────────────────────────────────────
+
+const fallbackAnalysis = (code, language) => {
+  // Basic pattern-based analysis when APIs fail
+  const issues = [];
+  const improvements = [];
+  const lines = code.split('\n');
+  
+  // Check for common issues
+  if (code.match(/console\.log/g)) {
+    issues.push({
+      severity: 'medium',
+      type: 'style',
+      description: 'Debug console.log statements should be removed before production',
+      line: 'various',
+      suggestion: 'Remove or use proper logging framework',
+    });
+  }
+  
+  if (code.match(/var\s+/g) && language === 'javascript') {
+    issues.push({
+      severity: 'medium',
+      type: 'style',
+      description: 'Use const/let instead of var for better scoping',
+      line: 'various',
+      suggestion: 'Replace var with const or let',
+    });
+  }
+  
+  if (code.length > 1000) {
+    improvements.push({
+      area: 'maintainability',
+      current: 'Large code block without structure',
+      suggested: 'Break into smaller, well-named functions',
+      impact: 'Improved readability and testability',
+    });
+  }
+  
+  if (!code.includes('error') && !code.includes('catch') && !code.includes('try')) {
+    improvements.push({
+      area: 'best_practices',
+      current: 'No error handling',
+      suggested: 'Add try-catch or error handling',
+      impact: 'Better reliability and debugging',
+    });
+  }
+  
+  return sanitizeResponse({
+    issues,
+    improvements,
+    optimized_code: code, // Return original when no AI available
+    explanation: `Basic analysis mode (APIs unavailable). Code appears to be ${language} with ${lines.length} lines.`,
+    edge_cases: [],
+    test_cases: [],
+    score: {
+      overall: 65,
+      readability: 70,
+      efficiency: 60,
+      best_practices: 60,
+    },
+    converted_code: '',
+  });
 };
 
 // ─── Sanitizer ────────────────────────────────────────────────────────────────
