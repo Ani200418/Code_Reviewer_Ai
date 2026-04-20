@@ -93,6 +93,9 @@ const runCode = (code, language) => {
         ${lang.image} \
         ${lang.command}`;
 
+      // Log Docker command for debugging
+      console.log(`[Docker] Executing ${language}:`, dockerCommand);
+
       // Execute with timeout
       exec(dockerCommand, { timeout: 8000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
         // Cleanup temp file
@@ -108,12 +111,14 @@ const runCode = (code, language) => {
         if (error) {
           // Timeout error
           if (error.killed) {
+            console.warn(`[Docker] Timeout for ${language}`);
             return resolve({ 
               success: false, 
               error: "Execution timeout: Code took longer than 8 seconds to run" 
             });
           }
           // Other errors (compilation, runtime)
+          console.warn(`[Docker] Error for ${language}:`, stderr || error.message);
           return resolve({ 
             success: false, 
             error: stderr || error.message || "Execution failed" 
@@ -122,6 +127,7 @@ const runCode = (code, language) => {
 
         // Check for stderr (compile/runtime errors)
         if (stderr && stderr.trim().length > 0) {
+          console.warn(`[Docker] Stderr for ${language}:`, stderr);
           return resolve({ 
             success: false, 
             error: stderr 
@@ -129,6 +135,7 @@ const runCode = (code, language) => {
         }
 
         // Success: return output
+        console.log(`[Docker] Success for ${language}, output length:`, stdout.length);
         resolve({ 
           success: true, 
           output: stdout || "" 

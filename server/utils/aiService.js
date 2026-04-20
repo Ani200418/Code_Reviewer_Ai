@@ -6,9 +6,11 @@
 
 const OpenAI = require('openai');
 const { removeComments } = require('./codeExecutor');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 let openaiClient = null;
 let groqClient = null;
+let geminiClient = null;
 
 const getOpenAIClient = () => {
   if (!openaiClient) {
@@ -31,6 +33,16 @@ const getGroqClient = () => {
     });
   }
   return groqClient;
+};
+
+const getGeminiClient = () => {
+  if (!geminiClient) {
+    if (!process.env.GEMINI_API_KEY) {
+      return null;
+    }
+    geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  }
+  return geminiClient;
 };
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
@@ -155,7 +167,22 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
   return response.choices[0]?.message?.content?.trim() || '';
 };
 
-// ─── Main function: Multi-API with race condition ──────────────────────────
+// ─── Call Gemini API ────────────────────────────────────────────────────────
+
+const callGemini = async (cleanedCode, language, targetLanguage) => {
+  const client = getGeminiClient();
+  if (!client) throw new Error('Gemini API key not configured');
+
+  const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const prompt = `${SYSTEM_PROMPT}\n\n${buildPrompt(cleanedCode, language, targetLanguage)}`;
+  
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  
+  // Extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  return jsonMatch ? jsonMatch[0].trim() : '';
+};
 
 const analyzeCode = async (code, language, targetLanguage = null) => {
   // Clean comments before analysis
@@ -201,6 +228,14 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     apiCalls.push({
       name: 'Groq',
       call: () => callGroq(cleanedCode, language, targetLanguage)
+    });
+  }
+
+  // Add Gemini if configured
+  if (process.env.GEMINI_API_KEY) {
+    apiCalls.push({
+      name: 'Gemini',
+      call: () => callGemini(cleanedCode, language, targetLanguage)
     });
   }
 
