@@ -250,17 +250,13 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   };
 
   // Array of API calls with names
-  // Using FREE tier APIs only: Groq + Gemini
+  // Using FREE tier APIs only: Groq (primary)
+  // Gemini is quota-limited, using Groq only
   const apiCalls = [
-    // Try Groq first (free tier, generous limits)
+    // Try Groq (free tier, generous limits)
     {
       name: 'Groq',
       call: () => callGroq(cleanedCode, language, targetLanguage)
-    },
-    // Try Gemini as fallback (free tier available)
-    {
-      name: 'Gemini',
-      call: () => callGemini(cleanedCode, language, targetLanguage)
     },
   ];
 
@@ -270,14 +266,10 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
       console.warn('[AI] ⚠️  Groq API key not configured, skipping');
       return false;
     }
-    if (api.name === 'Gemini' && !process.env.GEMINI_API_KEY) {
-      console.warn('[AI] ⚠️  Gemini API key not configured, skipping');
-      return false;
-    }
     return true;
   });
   
-  console.log(`[AI] Active FREE APIs: ${finalApiCalls.map(a => a.name).join(', ')}`);
+  console.log(`[AI] Using API: ${finalApiCalls.map(a => a.name).join(', ')}`);
 
   let rawContent = '';
   const errors = [];
