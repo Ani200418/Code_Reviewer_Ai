@@ -71,10 +71,33 @@ const buildPrompt = (code, language, targetLanguage) => {
 };
 
 // ─── Call OpenAI API ─────────────────────────────────────────────────────────
-// DISABLED - Account has no credits
-// const callOpenAI = async (cleanedCode, language, targetLanguage) => {
-//   ... removed for free tier ...
-// };
+
+const callOpenAI = async (cleanedCode, language, targetLanguage) => {
+  const client = getOpenAIClient();
+  const model = process.env.OPENAI_MODEL || 'gpt-4o';
+
+  console.log(`[OpenAI] Calling ${model}...`);
+  
+  try {
+    const response = await client.chat.completions.create({
+      model,
+      max_tokens: 4000,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
+      ],
+    });
+
+    const content = response.choices[0]?.message?.content;
+    console.log(`[OpenAI] ✅ Got response (${content?.length || 0} chars)`);
+    return content?.trim() || '';
+  } catch (err) {
+    console.error(`[OpenAI] ❌ Error: ${err.message}`);
+    throw err;
+  }
+};
 
 // ─── Call Groq API ──────────────────────────────────────────────────────────
 
@@ -133,22 +156,14 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
     
-    console.log(`[Gemini] Response length: ${text?.length || 0}`);
-    console.log(`[Gemini] Response preview: ${text?.substring(0, 100)}`);
-    
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const content = jsonMatch ? jsonMatch[0].trim() : '';
     
-    if (!content) {
-      console.error('[Gemini] ❌ No JSON found in response!');
-      return '';
-    }
-    
     console.log(`[Gemini] ✅ Got response (${content.length} chars)`);
     return content;
   } catch (err) {
-    console.error(`[Gemini] 💥 Error:`, err.message);
+    console.error(`[Gemini] ❌ Error: ${err.message}`);
     throw err;
   }
 };
@@ -194,26 +209,43 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   };
 
   // Array of API calls with names
-  // Using FREE tier APIs only: Groq (primary)
-  // Gemini is quota-limited, using Groq only
+  // Using all 3 APIs with smart fallback strategy
   const apiCalls = [
-    // Try Groq (free tier, generous limits)
+    // Try Groq first (free tier, fast)
     {
       name: 'Groq',
       call: () => callGroq(cleanedCode, language, targetLanguage)
+    },
+    // Try Gemini second (free tier available)
+    {
+      name: 'Gemini',
+      call: () => callGemini(cleanedCode, language, targetLanguage)
+    },
+    // Try OpenAI third (backup, requires credits)
+    { 
+      name: 'OpenAI', 
+      call: () => callOpenAI(cleanedCode, language, targetLanguage)
     },
   ];
 
   // Filter out APIs without keys
   const finalApiCalls = apiCalls.filter(api => {
     if (api.name === 'Groq' && !process.env.GROQ_API_KEY) {
-      console.warn('[AI] ⚠️  Groq API key not configured, skipping');
+      console.warn('[AI] ⚠️  Groq API key not configured');
+      return false;
+    }
+    if (api.name === 'Gemini' && !process.env.GEMINI_API_KEY) {
+      console.warn('[AI] ⚠️  Gemini API key not configured');
+      return false;
+    }
+    if (api.name === 'OpenAI' && !process.env.OPENAI_API_KEY) {
+      console.warn('[AI] ⚠️  OpenAI API key not configured');
       return false;
     }
     return true;
   });
   
-  console.log(`[AI] Using API: ${finalApiCalls.map(a => a.name).join(', ')}`);
+  console.log(`[AI] Available APIs: ${finalApiCalls.map(a => a.name).join(' -> ')}`);
 
   let rawContent = '';
   const errors = [];

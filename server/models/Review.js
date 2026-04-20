@@ -43,8 +43,9 @@ const scoreSchema = new mongoose.Schema(
 
 const aiResponseSchema = new mongoose.Schema(
   {
-    bugs: [bugSchema],
-    optimizations: [optimizationSchema],
+    issues: [bugSchema],
+    improvements: [optimizationSchema],
+    optimized_code: { type: String, default: '' },
     explanation: { type: String, default: '' },
     edge_cases: [{ type: String }],
     test_cases: [testCaseSchema],
