@@ -6,9 +6,8 @@
 const path      = require('path');
 const Review    = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
-const runCode = require('../runners/codeRunner');
 const { generateCodeName } = require('../utils/codeNaming');
-const { validateUTF8, validateSyntax, removeComments } = require('../utils/codeExecutor');
+const { validateUTF8 } = require('../utils/codeExecutor');
 const { reviewCodeSchema } = require('../utils/validators');
 
 const SUPPORTED_LANGUAGES = ['javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'other'];
@@ -55,35 +54,24 @@ const reviewCode = async (req, res, next) => {
     // Generate meaningful title for the code
     const title = generateCodeName(code, fileName);
 
-    // Step 1: Execute code in Docker sandbox first
-    let executionResult = await runCode(code, language);
-
-    // Step 2: If execution has an error, still try to get AI analysis
-    // (AI can provide insights even if code fails at runtime)
-    
-    // Step 3: Get AI analysis regardless of execution result
+    // Get AI analysis
     const aiResponse = await analyzeCode(code, language, targetLanguage);
     
     const processingTime = Date.now() - start;
 
-    // Step 4: Save review with complete information
+    // Save review with AI analysis only
     const review = await Review.create({
       userId:       req.userId,
       code,
       language,
       fileName:     fileName || null,
       title,
-      executionOutput: {
-        output: executionResult.output || '',
-        error: executionResult.error || null,
-        success: executionResult.success || false,
-      },
       aiResponse,
       score:        aiResponse.score.overall,
       processingTime,
     });
 
-    // Step 6: Return complete analysis with output
+    // Return AI analysis
     res.status(201).json({
       success: true,
       data: {
@@ -91,8 +79,6 @@ const reviewCode = async (req, res, next) => {
         language:           review.language,
         fileName:           review.fileName,
         title:              review.title,
-        compilationStatus:  'Success',
-        currentOutput:      executionResult.output || '',
         aiResponse:         review.aiResponse,
         score:              review.score,
         processingTime:     review.processingTime,
@@ -162,33 +148,25 @@ const uploadCode = async (req, res, next) => {
     // Generate meaningful title for the code
     const title = generateCodeName(code, fileName);
 
-    // Step 4: Execute code in Docker sandbox
-    let executionResult = await runCode(code, language);
-
-    // Step 5: Get AI analysis regardless of execution result
+    // Get AI analysis
     const targetLanguage = req.body.targetLanguage || null;
     const aiResponse = await analyzeCode(code, language, targetLanguage);
 
     const processingTime = Date.now() - start;
 
-    // Step 6: Save review with complete information
+    // Save review with AI analysis only
     const review = await Review.create({
       userId:            req.userId,
       code,
       language,
       fileName,
       title,
-      executionOutput: {
-        output: executionResult.output || '',
-        error: executionResult.error || null,
-        success: executionResult.success || false,
-      },
       aiResponse,
       score:             aiResponse.score.overall,
       processingTime,
     });
 
-    // Step 8: Return complete analysis
+    // Return AI analysis
     res.status(201).json({
       success: true,
       data: {
@@ -196,8 +174,6 @@ const uploadCode = async (req, res, next) => {
         language:           review.language,
         fileName:           review.fileName,
         title:              review.title,
-        compilationStatus:  'Success',
-        currentOutput:      executionResult.output || '',
         aiResponse:         review.aiResponse,
         score:              review.score,
         processingTime:     review.processingTime,

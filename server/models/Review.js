@@ -94,11 +94,6 @@ const reviewSchema = new mongoose.Schema(
       default: '',
       maxlength: [10000, 'User input cannot exceed 10,000 characters'],
     },
-    executionOutput: {
-      output: { type: String, default: '' },
-      error: { type: String, default: null },
-      success: { type: Boolean, default: false },
-    },
     aiResponse: {
       type: aiResponseSchema,
       required: true,
