@@ -7,6 +7,7 @@ const path      = require('path');
 const Review    = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
 const runCode = require('../runners/codeRunner');
+const { generateCodeName } = require('../utils/codeNaming');
 const { validateUTF8, validateSyntax, removeComments } = require('../utils/codeExecutor');
 const { reviewCodeSchema } = require('../utils/validators');
 
@@ -51,6 +52,9 @@ const reviewCode = async (req, res, next) => {
     const { code, language, fileName, targetLanguage } = value;
     const start = Date.now();
 
+    // Generate meaningful title for the code
+    const title = generateCodeName(code, fileName);
+
     // Step 1: Execute code in Docker sandbox first
     let executionResult = await runCode(code, language);
 
@@ -68,6 +72,7 @@ const reviewCode = async (req, res, next) => {
       code,
       language,
       fileName:     fileName || null,
+      title,
       executionOutput: {
         output: executionResult.output || '',
         error: executionResult.error || null,
@@ -85,6 +90,7 @@ const reviewCode = async (req, res, next) => {
         reviewId:           review._id,
         language:           review.language,
         fileName:           review.fileName,
+        title:              review.title,
         compilationStatus:  'Success',
         currentOutput:      executionResult.output || '',
         aiResponse:         review.aiResponse,
@@ -153,6 +159,9 @@ const uploadCode = async (req, res, next) => {
 
     const start = Date.now();
 
+    // Generate meaningful title for the code
+    const title = generateCodeName(code, fileName);
+
     // Step 4: Execute code in Docker sandbox
     let executionResult = await runCode(code, language);
 
@@ -168,6 +177,7 @@ const uploadCode = async (req, res, next) => {
       code,
       language,
       fileName,
+      title,
       executionOutput: {
         output: executionResult.output || '',
         error: executionResult.error || null,
@@ -185,6 +195,7 @@ const uploadCode = async (req, res, next) => {
         reviewId:           review._id,
         language:           review.language,
         fileName:           review.fileName,
+        title:              review.title,
         compilationStatus:  'Success',
         currentOutput:      executionResult.output || '',
         aiResponse:         review.aiResponse,

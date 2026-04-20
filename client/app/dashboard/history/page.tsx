@@ -109,6 +109,9 @@ export default function HistoryPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="badge-sky text-xs capitalize">{review.language}</span>
+                  {review.title && (
+                    <span className="text-xs text-slate-400 font-medium truncate max-w-[200px]">{review.title}</span>
+                  )}
                   {review.fileName && (
                     <span className="text-xs text-slate-500 font-mono truncate max-w-[180px]">{review.fileName}</span>
                   )}

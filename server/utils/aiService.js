@@ -247,52 +247,69 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     console.log(`[AI] Starting analysis for ${language} code (${cleanedCode.length} chars)`);
     console.log(`[AI] Available APIs: ${apiCalls.map(a => a.name).join(', ')}`);
     
-    const racePromises = apiCalls.map(api => 
-      callWithRetry(api.call, api.name)
-        .catch(err => {
-          errors.push(`${api.name}: ${err.message}`);
-          return null;
-        })
+    // Wrap each API call with timeout and error handling
+    const apiPromises = apiCalls.map(api => 
+      Promise.race([
+        callWithRetry(api.call, api.name, 2).then(result => {
+          if (result) {
+            console.log(`[AI] ✅ ${api.name} succeeded`);
+            return { success: true, result };
+          }
+          return { success: false, error: `${api.name} returned empty response` };
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`${api.name} timeout`)), 15000)
+        )
+      ]).catch(err => ({
+        success: false,
+        error: `${api.name}: ${err.message}`
+      }))
     );
 
-    const validPromises = racePromises.filter(p => p !== null);
-    if (validPromises.length === 0) {
-      const err = new Error('No AI services configured. Please set OPENAI_API_KEY environment variable.');
-      err.statusCode = 500;
-      throw err;
-    }
+    // Race all APIs - return first successful response
+    const raceResult = await Promise.race(
+      apiPromises.map((p, idx) => 
+        p.then(res => {
+          if (res.success) {
+            console.log(`[AI] First API success: ${apiCalls[idx].name}`);
+            return { apiName: apiCalls[idx].name, ...res };
+          }
+          throw res;
+        })
+      )
+    );
 
-    rawContent = await Promise.race(validPromises);
+    rawContent = raceResult.result;
 
-    // If race didn't complete, try sequentially
     if (!rawContent) {
-      console.log('[AI] Parallel calls failed, trying sequential with retries...');
+      // If race failed, try all sequentially with retries
+      console.log('[AI] Parallel race exhausted, trying sequential...');
       for (const api of apiCalls) {
         rawContent = await callWithRetry(api.call, api.name, 3);
         if (rawContent) {
-          console.log(`[AI] ✅ ${api.name} succeeded on sequential attempt`);
+          console.log(`[AI] ✅ Sequential: ${api.name} succeeded`);
           break;
         }
+        errors.push(`${api.name}: failed after retries`);
       }
     }
 
     if (!rawContent) {
-      console.error('[AI] All API services exhausted. Errors:', errors);
+      console.error('[AI] All APIs exhausted. Errors:', errors);
       const err = new Error(
         `All AI services failed. Common causes:\n` +
-        `• OpenAI: Check API key quota at https://platform.openai.com/account/billing/overview\n` +
-        `• Groq: Rate limit exceeded. Wait or upgrade at https://console.groq.com\n` +
-        `• Gemini: Free tier quota exhausted. Check https://ai.google.dev/gemini-api/docs/rate-limits\n\n` +
+        `• OpenAI: Check quota at https://platform.openai.com/account/billing/overview\n` +
+        `• Groq: Rate limit or invalid key at https://console.groq.com\n` +
+        `• Gemini: Quota exceeded at https://ai.google.dev/gemini-api/docs/rate-limits\n\n` +
         `Details: ${errors.join(' | ')}`
       );
       err.statusCode = 503;
       throw err;
     }
 
-    console.log(`[AI] Got response from one of the services (${rawContent.length} chars)`);
+    console.log(`[AI] Got response (${rawContent.length} chars)`);
   } catch (err) {
     console.error('[AI] Analysis error:', err.message);
-    // Preserve status code if already set
     if (!err.statusCode) {
       err.statusCode = 500;
     }

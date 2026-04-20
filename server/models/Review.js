@@ -83,6 +83,12 @@ const reviewSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    title: {
+      type: String,
+      default: 'Code Review',
+      maxlength: [200, 'Title cannot exceed 200 characters'],
+      trim: true,
+    },
     userInput: {
       type: String,
       default: '',

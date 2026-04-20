@@ -1,4 +1,4 @@
-const { exec } = require("child_process");
+const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -16,6 +16,11 @@ const languages = {
     image: "node:18-alpine",
     command: "node /app/code.js"
   },
+  typescript: {
+    file: "code.ts",
+    image: "node:18-alpine",
+    command: "bash -c 'npx ts-node /app/code.ts 2>&1'"
+  },
   python: {
     file: "code.py",
     image: "python:3.11-alpine",
@@ -28,8 +33,8 @@ const languages = {
   },
   cpp: {
     file: "code.cpp",
-    image: "gcc:latest",
-    command: "bash -c 'cd /app && g++ code.cpp -o code && ./code'"
+    image: "gcc:12",
+    command: "bash -c 'cd /app && g++ -std=c++17 code.cpp -o code && ./code'"
   },
   go: {
     file: "code.go",
@@ -39,7 +44,7 @@ const languages = {
   rust: {
     file: "main.rs",
     image: "rust:latest",
-    command: "bash -c 'cd /app && rustc main.rs && ./main'"
+    command: "bash -c 'cd /app && rustc -O main.rs -o main && ./main'"
   }
 };
 
@@ -51,16 +56,14 @@ const languages = {
  */
 const runCode = (code, language) => {
   return new Promise((resolve) => {
-    // Validate language
     const lang = languages[language];
     if (!lang) {
       return resolve({ 
         success: false, 
-        error: `Unsupported language: ${language}. Supported: javascript, python, java, cpp, go, rust` 
+        error: `Unsupported language: ${language}. Supported: javascript, typescript, python, java, cpp, go, rust` 
       });
     }
 
-    // Validate code
     if (!code || typeof code !== 'string' || code.trim().length === 0) {
       return resolve({ 
         success: false, 
@@ -68,7 +71,7 @@ const runCode = (code, language) => {
       });
     }
 
-    // Generate unique filename to avoid conflicts
+    // Create unique file with timestamp
     const timestamp = Date.now();
     const uniqueFile = lang.file.replace(/(\.\w+)$/, `_${timestamp}$1`);
     const filePath = path.join(tempDir, uniqueFile);
@@ -76,93 +79,79 @@ const runCode = (code, language) => {
     try {
       // Write code to file
       fs.writeFileSync(filePath, code, 'utf8');
+      console.log(`[Docker] Wrote ${language} code to ${filePath}`);
 
-      // Docker command with safety limits:
-      // --rm: Remove container after execution
-      // --memory=200m: Max 200MB memory
-      // --cpus=0.5: Max 0.5 CPU cores
-      // --read-only: Read-only filesystem
+      // Docker command: memory/CPU limits + timeout
+      // --rm: Remove container after exit
+      // --memory=256m: Max 256MB
+      // --cpus=0.5: Max half CPU
+      // -v: Volume mount (temp folder as /app)
       // --network=none: No network access
-      // timeout: 8 seconds max execution time
-      const dockerCommand = `docker run --rm \
-        --memory=200m \
-        --cpus=0.5 \
-        --read-only \
-        --network=none \
-        -v "${path.resolve(tempDir)}:/app:ro" \
-        ${lang.image} \
-        ${lang.command}`;
+      const dockerCmd = `docker run --rm --memory=256m --cpus=0.5 --network=none -v "${path.resolve(tempDir)}:/app" ${lang.image} ${lang.command}`;
 
-      // Log Docker command for debugging
-      console.log(`[Docker] Executing ${language}:`, dockerCommand);
+      console.log(`[Docker] Executing ${language}:`, dockerCmd);
 
-      // Execute with timeout
-      exec(dockerCommand, { timeout: 8000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-        // Cleanup temp file
+      // Use execSync with timeout for reliability
+      try {
+        const stdout = execSync(dockerCmd, {
+          timeout: 8000,
+          maxBuffer: 1024 * 1024 * 5,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        console.log(`[Docker] Success for ${language}`);
+        return resolve({
+          success: true,
+          output: stdout || ""
+        });
+      } catch (execErr) {
+        // Handle execution errors
+        const stderr = execErr.stderr ? execErr.stderr.toString() : '';
+        const stdout = execErr.stdout ? execErr.stdout.toString() : '';
+        const message = execErr.message || '';
+
+        // Docker not installed
+        if (message.includes('ENOENT') || message.includes('docker: not found')) {
+          console.warn(`[Docker] Not available - ${message}`);
+          return resolve({
+            success: true,
+            output: ''  // Return success with empty output on serverless platforms
+          });
+        }
+
+        // Timeout
+        if (execErr.killed || message.includes('timeout')) {
+          return resolve({
+            success: false,
+            error: `Execution timeout: Code took longer than 8 seconds`
+          });
+        }
+
+        // Compilation/runtime error
+        console.warn(`[Docker] Error: ${stderr || stdout || message}`);
+        return resolve({
+          success: false,
+          error: stderr || stdout || message || 'Execution failed'
+        });
+      }
+    } catch (err) {
+      console.error(`[Docker] Error: ${err.message}`);
+      return resolve({
+        success: false,
+        error: `Failed to execute: ${err.message}`
+      });
+    } finally {
+      // Cleanup
+      setImmediate(() => {
         try {
           if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
+            console.log(`[Docker] Cleaned up ${filePath}`);
           }
         } catch (cleanupErr) {
-          console.warn(`Cleanup failed for ${filePath}:`, cleanupErr.message);
+          console.warn(`Cleanup error: ${cleanupErr.message}`);
         }
-
-        // Handle execution errors
-        if (error) {
-          // Docker not found on serverless platform
-          if (error.message.includes('docker: not found') || error.code === 'ENOENT') {
-            console.warn(`[Docker] Not available on this platform for ${language}`);
-            // Return success with empty output (AI will analyze without execution)
-            return resolve({
-              success: true,
-              output: '',
-            });
-          }
-          // Timeout error
-          if (error.killed) {
-            console.warn(`[Docker] Timeout for ${language}`);
-            return resolve({ 
-              success: false, 
-              error: "Execution timeout: Code took longer than 8 seconds to run" 
-            });
-          }
-          // Other errors (compilation, runtime)
-          console.warn(`[Docker] Error for ${language}:`, stderr || error.message);
-          return resolve({ 
-            success: false, 
-            error: stderr || error.message || "Execution failed" 
-          });
-        }
-
-        // Check for stderr (compile/runtime errors)
-        if (stderr && stderr.trim().length > 0) {
-          console.warn(`[Docker] Stderr for ${language}:`, stderr);
-          return resolve({ 
-            success: false, 
-            error: stderr 
-          });
-        }
-
-        // Success: return output
-        console.log(`[Docker] Success for ${language}, output length:`, stdout.length);
-        resolve({ 
-          success: true, 
-          output: stdout || "" 
-        });
-      });
-    } catch (err) {
-      // Cleanup on error
-      try {
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (cleanupErr) {
-        console.warn(`Cleanup failed for ${filePath}:`, cleanupErr.message);
-      }
-
-      resolve({ 
-        success: false, 
-        error: `File write failed: ${err.message}` 
       });
     }
   });

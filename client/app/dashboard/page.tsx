@@ -151,7 +151,7 @@ export default function DashboardPage() {
                   <span className="badge-sky text-xs capitalize flex-shrink-0">{r.language}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-300 font-medium truncate">
-                      {r.fileName || `${capitalize(r.language)} snippet`}
+                      {r.title || r.fileName || `${capitalize(r.language)} snippet`}
                     </p>
                     <p className="text-xs text-slate-600">{timeAgo(r.createdAt)}</p>
                   </div>

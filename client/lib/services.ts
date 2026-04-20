@@ -50,6 +50,7 @@ export interface ReviewResult {
   reviewId: string;
   language: string;
   fileName?: string;
+  title?: string;
   compilationStatus: string;
   currentOutput?: string;
   aiResponse: AIResponse;
@@ -70,6 +71,7 @@ export interface ReviewHistoryItem {
   _id: string;
   language: string;
   fileName?: string;
+  title?: string;
   score: number;
   createdAt: string;
   processingTime: number;
