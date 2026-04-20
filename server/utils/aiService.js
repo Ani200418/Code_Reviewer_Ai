@@ -47,84 +47,27 @@ const getGeminiClient = () => {
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a senior software engineer with 15+ years of experience specializing in code quality and optimization.
+const SYSTEM_PROMPT = `You are a code quality expert. Analyze code briefly and provide ONLY valid JSON.
 
-TASK: Analyze code and provide ONLY valid JSON response - no markdown, no extra text, no code fences.
-
-REQUIRED JSON SCHEMA (ALL fields mandatory):
-{
-  "issues": [
-    {
-      "severity": "high|medium|low",
-      "type": "bug|performance|security|style",
-      "description": "clear explanation of issue",
-      "line": "approximate line number or location",
-      "suggestion": "how to fix it"
-    }
-  ],
-  "improvements": [
-    {
-      "area": "readability|efficiency|maintainability|best_practices",
-      "current": "what's currently done",
-      "suggested": "what should be done instead",
-      "impact": "positive impact of change"
-    }
-  ],
-  "optimized_code": "COMPLETE refactored code with ALL improvements applied. Must include: better naming, proper error handling, performance optimizations, security fixes, readable structure. Must be fully functional and ready to use.",
-  "explanation": "3-4 sentence summary of code purpose and overall assessment",
-  "edge_cases": ["edge case 1", "edge case 2"],
-  "test_cases": [
-    {
-      "description": "what this tests",
-      "input": "test input",
-      "expected_output": "expected result"
-    }
-  ],
-  "score": {
-    "overall": 0-100,
-    "readability": 0-100,
-    "efficiency": 0-100,
-    "best_practices": 0-100
-  },
-  "converted_code": "if translation requested, translated version; otherwise empty string"
+SCHEMA: {
+  "issues": [{"severity":"high|medium|low","type":"bug|performance|security|style","description":"","suggestion":""}],
+  "improvements": [{"area":"readability|efficiency|maintainability|best_practices","current":"","suggested":"","impact":""}],
+  "optimized_code": "improved code",
+  "explanation": "brief summary",
+  "edge_cases": [],
+  "test_cases": [{"description":"","input":"","expected_output":""}],
+  "score": {"overall":0,"readability":0,"efficiency":0,"best_practices":0},
+  "converted_code": ""
 }
 
-CRITICAL RULES FOR optimized_code FIELD:
-1. ALWAYS include a complete optimized version - NEVER leave this empty
-2. Apply ALL identified improvements to the optimized code
-3. If no issues found, still improve code with enhancements like:
-   - Better variable/function naming
-   - Added error handling
-   - Performance optimizations
-   - Better code structure
-   - Documentation/comments
-4. Keep original functionality while improving code quality
-5. Use modern language features and best practices
-6. Code must be fully tested and production-ready
-7. Include proper input validation and edge case handling
-
-SCORING GUIDELINES:
-- 90-100: Excellent, minimal improvements needed
-- 70-89: Good, some improvements recommended
-- 50-69: Average, significant improvements needed
-- 30-49: Poor, major refactoring required
-- 0-29: Critical, extensive rewrite necessary
-
-RESPONSE FORMAT: Return ONLY the JSON object. NO additional text.`;
+IMPORTANT: Return ONLY JSON, no text before or after.`;
 
 const buildPrompt = (code, language, targetLanguage) => {
   const targetText = targetLanguage 
-    ? `\n\nTARGET LANGUAGE FOR CONVERSION: ${targetLanguage.toUpperCase()}\nProvide fully translated code in the 'converted_code' field.`
-    : `\n\nNo translation requested - leave 'converted_code' empty.`;
+    ? `Translate to: ${targetLanguage.toUpperCase()}`
+    : '';
   
-  return `LANGUAGE: ${language.toUpperCase()}${targetText}
-
-CODE TO ANALYZE:
-\`\`\`${language}
-${code}
-\`\`\`
-
-Analyze this code thoroughly. Provide detailed issues, improvements, and a complete optimized version. Return ONLY the JSON object.`;
+  return `LANG: ${language}\n${targetText}\n\nCODE:\n\`\`\`\n${code}\n\`\`\`\n\nAnalyze. Return JSON only.`;
 };
 
 // ─── Call OpenAI API ─────────────────────────────────────────────────────────
@@ -146,7 +89,7 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
       model: 'llama-3.3-70b-versatile',
       max_tokens: 4000,
       temperature: 0.2,
-      response_format: { type: 'json_object' },
+      // NOTE: Groq doesn't support response_format yet, so we request JSON in the prompt instead
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
@@ -158,7 +101,7 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
     
     const content = response.choices[0]?.message?.content;
     console.log(`[Groq] Raw content length: ${content?.length || 0}`);
-    console.log(`[Groq] Raw content preview: ${content?.substring(0, 100)}`);
+    console.log(`[Groq] Raw content preview: ${content?.substring(0, 150)}`);
     
     if (!content) {
       console.error('[Groq] ❌ No content in response!');
@@ -170,6 +113,7 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
     return trimmed;
   } catch (err) {
     console.error(`[Groq] 💥 Error:`, err.message);
+    console.error(`[Groq] Full error:`, err);
     throw err;
   }
 };
