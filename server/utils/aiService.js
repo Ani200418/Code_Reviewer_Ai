@@ -194,22 +194,22 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   };
 
   // Array of API calls with names
-  // Using all 3 APIs with smart fallback strategy
+  // Using sequential fallback strategy: try each API in order, only move to next if it fails
   const apiCalls = [
-    // Try Groq first (free tier, fast)
-    {
-      name: 'Groq',
-      call: () => callGroq(cleanedCode, language, targetLanguage)
+    // Try OpenAI first (primary)
+    { 
+      name: 'OpenAI', 
+      call: () => callOpenAI(cleanedCode, language, targetLanguage)
     },
-    // Try Gemini second (free tier available)
+    // Try Gemini second (fallback)
     {
       name: 'Gemini',
       call: () => callGemini(cleanedCode, language, targetLanguage)
     },
-    // Try OpenAI third (backup, requires credits)
-    { 
-      name: 'OpenAI', 
-      call: () => callOpenAI(cleanedCode, language, targetLanguage)
+    // Try Groq third (last resort)
+    {
+      name: 'Groq',
+      call: () => callGroq(cleanedCode, language, targetLanguage)
     },
   ];
 
@@ -236,66 +236,39 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   const errors = [];
 
   try {
-    // Try APIs in parallel with Promise.allSettled for robust handling
+    // Sequential API fallback strategy - only call next API if previous fails
     console.log(`\n${'='.repeat(60)}`);
     console.log(`[AI] 🚀 Starting analysis for ${language} code`);
     console.log(`[AI] Code size: ${cleanedCode.length} chars`);
-    console.log(`[AI] Available APIs: ${finalApiCalls.map(a => a.name).join(', ')}`);
+    console.log(`[AI] Available APIs: ${finalApiCalls.map(a => a.name).join(' → ')}`);
     console.log(`${'='.repeat(60)}\n`);
     
-    // Call all APIs with timeout and retry
-    const apiPromises = finalApiCalls.map(async (api) => {
-      try {
-        console.log(`[API] Calling ${api.name}...`);
-        const result = await callWithRetry(api.call, api.name, 2);
-        
-        // Check for null/undefined explicitly
-        if (result && result.trim && result.trim().length > 0) {
-          console.log(`[API] ✅ ${api.name} returned valid response`);
-          return { success: true, apiName: api.name, result };
-        }
-        
-        console.log(`[API] ❌ ${api.name} returned empty response`);
-        errors.push(`${api.name}: returned empty response`);
-        return { success: false, apiName: api.name };
-      } catch (err) {
-        const errMsg = err.message || String(err);
-        console.error(`[API] 💥 ${api.name} error:`, errMsg);
-        errors.push(`${api.name}: ${errMsg}`);
-        return { success: false, apiName: api.name, error: errMsg };
-      }
-    });
-
-    // Use allSettled to get results from all APIs, then pick first successful
-    console.log(`[AI] 📡 Waiting for API responses...`);
-    const results = await Promise.allSettled(apiPromises);
-    
-    console.log(`[AI] 📊 Got ${results.length} results`);
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value?.success && result.value?.result) {
-        rawContent = result.value.result;
-        console.log(`[AI] ✅✅✅ Using response from ${result.value.apiName}`);
+    // Try APIs sequentially - only move to next if current fails
+    for (const api of finalApiCalls) {
+      if (rawContent) {
+        console.log(`[AI] ✅ Already got valid response from earlier API, skipping ${api.name}`);
         break;
       }
-    }
 
-    // If parallel failed, try sequentially with longer retries
-    if (!rawContent) {
-      console.log(`[AI] ⚠️  Parallel attempts failed, trying sequential with more retries...`);
-      for (const api of finalApiCalls) {
-        try {
-          console.log(`[AI] 🔄 Sequential attempt for ${api.name}...`);
-          rawContent = await callWithRetry(api.call, api.name, 3);
-          
-          if (rawContent && typeof rawContent === 'string' && rawContent.trim().length > 0) {
-            console.log(`[AI] ✅✅✅ Sequential: ${api.name} succeeded`);
-            break;
-          }
-          
-          console.log(`[AI] Sequential ${api.name} returned empty, trying next...`);
-        } catch (err) {
-          console.error(`[AI] Sequential ${api.name} failed:`, err.message);
+      try {
+        console.log(`\n[API] 🔄 Attempting ${api.name}...`);
+        const result = await callWithRetry(api.call, api.name, 2);
+        
+        // Check for valid response
+        if (result && result.trim && result.trim().length > 0) {
+          rawContent = result;
+          console.log(`[API] ✅✅✅ SUCCESS: ${api.name} returned valid response`);
+          console.log(`[AI] 📝 Response length: ${rawContent.length} chars\n`);
+          break; // Don't try other APIs
+        } else {
+          console.log(`[API] ⚠️  ${api.name} returned empty response, trying next API...`);
+          errors.push(`${api.name}: returned empty response`);
         }
+      } catch (err) {
+        const errMsg = err.message || String(err);
+        console.error(`[API] ❌ ${api.name} failed:`, errMsg);
+        errors.push(`${api.name}: ${errMsg}`);
+        console.log(`[AI] Moving to next API...\n`);
       }
     }
 
