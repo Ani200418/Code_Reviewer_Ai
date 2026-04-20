@@ -111,8 +111,8 @@ const runCode = (code, language) => {
         const stdout = execErr.stdout ? execErr.stdout.toString() : '';
         const message = execErr.message || '';
 
-        // Docker not installed
-        if (message.includes('ENOENT') || message.includes('docker: not found')) {
+        // Docker not installed or not available
+        if (message.includes('ENOENT') || message.includes('docker: not found') || message.includes('Error: Cannot find module')) {
           console.warn(`[Docker] Not available - ${message}`);
           return resolve({
             success: true,

@@ -243,54 +243,52 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   const errors = [];
 
   try {
-    // Try APIs in parallel with Promise.race for speed
+    // Try APIs in parallel with Promise.allSettled for robust handling
     console.log(`[AI] Starting analysis for ${language} code (${cleanedCode.length} chars)`);
     console.log(`[AI] Available APIs: ${apiCalls.map(a => a.name).join(', ')}`);
     
-    // Wrap each API call with timeout and error handling
-    const apiPromises = apiCalls.map(api => 
-      Promise.race([
-        callWithRetry(api.call, api.name, 2).then(result => {
-          if (result) {
-            console.log(`[AI] ✅ ${api.name} succeeded`);
-            return { success: true, result };
-          }
-          return { success: false, error: `${api.name} returned empty response` };
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`${api.name} timeout`)), 15000)
-        )
-      ]).catch(err => ({
-        success: false,
-        error: `${api.name}: ${err.message}`
-      }))
-    );
-
-    // Race all APIs - return first successful response
-    const raceResult = await Promise.race(
-      apiPromises.map((p, idx) => 
-        p.then(res => {
-          if (res.success) {
-            console.log(`[AI] First API success: ${apiCalls[idx].name}`);
-            return { apiName: apiCalls[idx].name, ...res };
-          }
-          throw res;
-        })
-      )
-    );
-
-    rawContent = raceResult.result;
-
-    if (!rawContent) {
-      // If race failed, try all sequentially with retries
-      console.log('[AI] Parallel race exhausted, trying sequential...');
-      for (const api of apiCalls) {
-        rawContent = await callWithRetry(api.call, api.name, 3);
-        if (rawContent) {
-          console.log(`[AI] ✅ Sequential: ${api.name} succeeded`);
-          break;
+    // Call all APIs with timeout and retry
+    const apiPromises = apiCalls.map(async (api) => {
+      try {
+        const result = await callWithRetry(api.call, api.name, 2);
+        if (result) {
+          console.log(`[AI] ✅ ${api.name} succeeded`);
+          return { success: true, apiName: api.name, result };
         }
-        errors.push(`${api.name}: failed after retries`);
+        errors.push(`${api.name}: returned empty response`);
+        return { success: false, apiName: api.name };
+      } catch (err) {
+        const errMsg = err.message || String(err);
+        errors.push(`${api.name}: ${errMsg}`);
+        console.warn(`[AI] ${api.name} failed: ${errMsg}`);
+        return { success: false, apiName: api.name, error: errMsg };
+      }
+    });
+
+    // Use allSettled to get results from all APIs, then pick first successful
+    const results = await Promise.allSettled(apiPromises);
+    
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value?.success && result.value?.result) {
+        rawContent = result.value.result;
+        console.log(`[AI] ✅ Using response from ${result.value.apiName}`);
+        break;
+      }
+    }
+
+    // If parallel failed, try sequentially with longer retries
+    if (!rawContent) {
+      console.log('[AI] Parallel attempts exhausted, trying sequential with more retries...');
+      for (const api of apiCalls) {
+        try {
+          rawContent = await callWithRetry(api.call, api.name, 3);
+          if (rawContent) {
+            console.log(`[AI] ✅ Sequential: ${api.name} succeeded`);
+            break;
+          }
+        } catch (err) {
+          console.warn(`[AI] Sequential ${api.name} failed:`, err.message);
+        }
       }
     }
 
