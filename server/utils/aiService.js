@@ -245,6 +245,8 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
   try {
     // Try APIs in parallel with Promise.race for speed
     console.log(`[AI] Starting analysis for ${language} code (${cleanedCode.length} chars)`);
+    console.log(`[AI] Available APIs: ${apiCalls.map(a => a.name).join(', ')}`);
+    
     const racePromises = apiCalls.map(api => 
       callWithRetry(api.call, api.name)
         .catch(err => {
@@ -255,7 +257,9 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
 
     const validPromises = racePromises.filter(p => p !== null);
     if (validPromises.length === 0) {
-      throw new Error('No AI services configured. Please set at least OPENAI_API_KEY.');
+      const err = new Error('No AI services configured. Please set OPENAI_API_KEY environment variable.');
+      err.statusCode = 500;
+      throw err;
     }
 
     rawContent = await Promise.race(validPromises);
@@ -273,13 +277,25 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     }
 
     if (!rawContent) {
-      console.error('[AI] All API services exhausted without response');
-      throw new Error('All AI services failed after retries. Please check API keys and quotas.');
+      console.error('[AI] All API services exhausted. Errors:', errors);
+      const err = new Error(
+        `All AI services failed. Common causes:\n` +
+        `• OpenAI: Check API key quota at https://platform.openai.com/account/billing/overview\n` +
+        `• Groq: Rate limit exceeded. Wait or upgrade at https://console.groq.com\n` +
+        `• Gemini: Free tier quota exhausted. Check https://ai.google.dev/gemini-api/docs/rate-limits\n\n` +
+        `Details: ${errors.join(' | ')}`
+      );
+      err.statusCode = 503;
+      throw err;
     }
 
     console.log(`[AI] Got response from one of the services (${rawContent.length} chars)`);
   } catch (err) {
     console.error('[AI] Analysis error:', err.message);
+    // Preserve status code if already set
+    if (!err.statusCode) {
+      err.statusCode = 500;
+    }
     throw err;
   }
 

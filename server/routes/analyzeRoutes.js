@@ -54,7 +54,7 @@ router.post('/analyze', protect, aiRateLimiter, async (req, res, next) => {
     const execution = await runCode(code, language);
     console.log(`[Docker] Execution result: success=${execution.success}, outputLength=${execution.output?.length || 0}`);
 
-    // Step 2: If execution fails, still try analysis (AI can provide insights)
+    // Step 2: If execution fails, return error
     if (!execution.success) {
       console.log(`[Docker] Execution error: ${execution.error}`);
       return res.status(400).json({

@@ -94,21 +94,28 @@ const errorHandler = (err, req, res, next) => {
     message = 'Unexpected file field in upload request.';
   }
 
-  // AI API errors
-  if (err.status === 429) {
+  // AI API errors (check both err.status and err.statusCode)
+  if (err.status === 429 || err.statusCode === 429) {
     statusCode = 429;
-    message = 'AI service is currently busy. Please try again in a moment.';
+    message = 'AI service rate limit exceeded. Please try again in a moment.';
   }
 
-  if (err.status === 503) {
+  if (err.status === 503 || err.statusCode === 503) {
     statusCode = 503;
-    message = 'AI service is temporarily unavailable. Please try again later.';
+    message = err.message || 'AI services temporarily unavailable. Please check API keys and quotas.';
   }
 
+  // Handle detailed error responses in development/staging
+  const isDetailedErrorEnv = process.env.NODE_ENV !== 'production';
+  
   res.status(statusCode).json({
     success: false,
     message,
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+    ...(isDetailedErrorEnv && { 
+      details: err.message,
+      timestamp: new Date().toISOString(),
+    }),
+    ...(isDetailedErrorEnv && err.stack && { stack: err.stack }),
   });
 };
 
