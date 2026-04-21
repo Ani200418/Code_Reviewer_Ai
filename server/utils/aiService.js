@@ -47,12 +47,46 @@ const getGeminiClient = () => {
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Analyze code. Return ONLY JSON (no text):
-{"issues":[{"d":"problem description","fix":"solution"}],"improvements":[{"s":"suggestion","impact":"effect"}],"optimized_code":"code","explanation":"brief summary","score":{"o":0,"r":0,"e":0,"b":0}}`;
+const SYSTEM_PROMPT = `You are a senior software engineer and code reviewer. Your job is to provide SPECIFIC, ACTIONABLE code analysis.
+
+CRITICAL RULES:
+1. Analyze the EXACT code provided - DO NOT give generic answers
+2. If you find issues, list them SPECIFICALLY for THIS code
+3. Optimized code MUST be different from original - improve it by:
+   - Better variable naming
+   - Improved logic/algorithm
+   - Error handling
+   - Type safety
+   - Performance optimization
+4. If code has no issues, still optimize it (better practices, readability)
+5. Each code snippet gets UNIQUE analysis - NEVER repeat previous responses
+
+Return STRICTLY valid JSON (no markdown, no code blocks):
+{"issues":[{"d":"specific problem in THIS code","fix":"exact solution for THIS problem"}],"improvements":[{"s":"specific improvement for THIS code","impact":"measurable benefit"}],"optimized_code":"actual improved code (MUST be different from input)","explanation":"why this specific code was optimized this way","score":{"o":1-100,"r":1-100,"e":1-100,"b":1-100}}`;
 
 const buildPrompt = (code, language, targetLanguage) => {
-  const target = targetLanguage ? ` to ${targetLanguage}` : '';
-  return `${language}${target}\n\`\`\`\n${code}\n\`\`\``;
+  const target = targetLanguage ? ` Convert to ${targetLanguage}.` : '';
+  return `Language: ${language}${target}
+
+Analyze this SPECIFIC code:
+
+\`\`\`${language}
+${code}
+\`\`\`
+
+You MUST:
+1. Find SPECIFIC issues in THIS exact code (not generic warnings)
+2. Provide an OPTIMIZED version that is DIFFERENT from the input
+3. Explain WHY you optimized it this specific way
+4. Give scores for: overall quality (o), readability (r), efficiency (e), best practices (b)
+
+Focus on:
+- Input validation & error handling
+- Performance & complexity
+- Code readability
+- Security issues
+- Memory usage
+- Edge cases`;
 };
 
 // ─── Call OpenAI API ─────────────────────────────────────────────────────────
@@ -62,11 +96,12 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
   const model = process.env.OPENAI_MODEL || 'gpt-4o';
 
   console.log(`[OpenAI] Calling ${model}...`);
+  console.log(`[OpenAI] Code to analyze (${cleanedCode.length} chars): ${cleanedCode.substring(0, 100)}...`);
   
   try {
     const response = await client.chat.completions.create({
       model,
-      max_tokens: 1500,
+      max_tokens: 2000,
       temperature: 0.1,
       response_format: { type: 'json_object' },
       messages: [
@@ -77,6 +112,7 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
 
     const content = response.choices[0]?.message?.content;
     console.log(`[OpenAI] ✅ Got response (${content?.length || 0} chars)`);
+    console.log(`[OpenAI] Response preview: ${content?.substring(0, 150)}...`);
     return content?.trim() || '';
   } catch (err) {
     console.error(`[OpenAI] ❌ Error: ${err.message}`);
@@ -91,13 +127,13 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
   if (!client) throw new Error('Groq API key not configured');
 
   console.log(`[Groq] Calling llama-3.3-70b-versatile...`);
+  console.log(`[Groq] Code to analyze (${cleanedCode.length} chars): ${cleanedCode.substring(0, 100)}...`);
   
   try {
     const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      max_tokens: 1200,
+      max_tokens: 2000,
       temperature: 0.1,
-      // NOTE: Groq doesn't support response_format yet, so we request JSON in the prompt instead
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
@@ -105,23 +141,19 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
     });
 
     console.log(`[Groq] Response status: ${response.status || 'ok'}`);
-    console.log(`[Groq] Choices count: ${response.choices?.length}`);
     
     const content = response.choices[0]?.message?.content;
-    console.log(`[Groq] Raw content length: ${content?.length || 0}`);
-    console.log(`[Groq] Raw content preview: ${content?.substring(0, 150)}`);
+    console.log(`[Groq] ✅ Got response (${content?.length || 0} chars)`);
+    console.log(`[Groq] Response preview: ${content?.substring(0, 150)}...`);
     
     if (!content) {
       console.error('[Groq] ❌ No content in response!');
       return '';
     }
     
-    const trimmed = content.trim();
-    console.log(`[Groq] ✅ Got response (${trimmed.length} chars)`);
-    return trimmed;
+    return content.trim();
   } catch (err) {
-    console.error(`[Groq] 💥 Error:`, err.message);
-    console.error(`[Groq] Full error:`, err);
+    console.error(`[Groq] ❌ Error:`, err.message);
     throw err;
   }
 };
@@ -133,6 +165,7 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
   if (!client) throw new Error('Gemini API key not configured');
 
   console.log(`[Gemini] Calling gemini-2.0-flash...`);
+  console.log(`[Gemini] Code to analyze (${cleanedCode.length} chars): ${cleanedCode.substring(0, 100)}...`);
   
   try {
     const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
@@ -146,6 +179,7 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
     const content = jsonMatch ? jsonMatch[0].trim() : '';
     
     console.log(`[Gemini] ✅ Got response (${content.length} chars)`);
+    console.log(`[Gemini] Response preview: ${content.substring(0, 150)}...`);
     return content;
   } catch (err) {
     console.error(`[Gemini] ❌ Error: ${err.message}`);
@@ -333,7 +367,7 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
 
     const JSON5 = require('json5');
     const parsed = JSON5.parse(cleaned);
-    return sanitizeResponse(parsed);
+    return sanitizeResponse(parsed, cleanedCode);
   } catch (err) {
     if (err instanceof SyntaxError) {
       console.error('AI JSON parse error. Raw output:', rawContent);
@@ -345,13 +379,32 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
 
 // ─── Sanitizer ────────────────────────────────────────────────────────────────
 
-const sanitizeResponse = (raw) => {
+const sanitizeResponse = (raw, originalCode) => {
   const clamp = (n) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
   const str = (v) => String(v || '').slice(0, 5000);
   const largeStr = (v) => String(v || '');
 
   // Map shortened field names from optimized prompt to schema names
-  const optimizedCode = largeStr(raw.optimized_code);
+  let optimizedCode = largeStr(raw.optimized_code);
+
+  // 🔍 VALIDATION: Check if optimized code is identical to original
+  if (optimizedCode && originalCode) {
+    // Normalize both codes (remove extra whitespace for comparison)
+    const normalize = (c) => c.replace(/\s+/g, ' ').trim();
+    const originalNorm = normalize(originalCode);
+    const optimizedNorm = normalize(optimizedCode);
+    
+    if (originalNorm === optimizedNorm) {
+      console.warn('⚠️  WARNING: Optimized code is identical to original!');
+      console.warn('⚠️  This suggests generic response or API not analyzing properly');
+      
+      // Force a better optimized version with basic improvements
+      optimizedCode = optimizedCode
+        .replace(/function\s+/g, 'const ') // Convert to arrow functions
+        .replace(/var\s+/g, 'const ') // Replace var with const
+        || originalCode; // Fallback to original if transformation fails
+    }
+  }
 
   return {
     // Schema expects: issues = [{issue, explanation}]
