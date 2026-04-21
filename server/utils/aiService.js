@@ -365,16 +365,12 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
         rawContent = JSON.stringify({
           issues: [
             {
-              description: 'Missing input validation - the function doesn\'t check if input is an array',
-              severity: 'high',
-              type: 'bug',
-              suggestion: 'Add array type check at the beginning of the function'
+              issue: 'Missing input validation',
+              explanation: 'The function does not check if the input is an array. Add array type check at the beginning.'
             },
             {
-              description: 'No type checking for non-numeric values in the array',
-              severity: 'medium',
-              type: 'bug',
-              suggestion: 'Add a check to verify all elements are numeric before processing'
+              issue: 'No type checking for array elements',
+              explanation: 'Non-numeric values in the array are not validated. Add a check to verify all elements are numeric.'
             }
           ],
           improvements: [
@@ -522,9 +518,23 @@ const sanitizeResponse = (raw, originalCode) => {
     console.warn('⚠️  Missing test_cases');
   }
 
+  // Map AI response to MongoDB schema format
+  // Schema expects: issues: [{issue, explanation}], improvements: [{suggestion, impact}]
   return {
     issues: Array.isArray(raw.issues)
-      ? raw.issues.filter(i => i).slice(0, 15)
+      ? raw.issues
+          .filter(i => i)
+          .slice(0, 15)
+          .map((issue) => {
+            // Handle both old format {d, fix} and new format {description, suggestion}
+            const issueText = issue.issue || issue.d || issue.description || String(issue);
+            const explanation = issue.explanation || issue.fix || issue.suggestion || '';
+            
+            return {
+              issue: str(issueText),
+              explanation: str(explanation),
+            };
+          })
       : [],
     improvements: Array.isArray(raw.improvements)
       ? raw.improvements.slice(0, 15).map((imp) => ({
