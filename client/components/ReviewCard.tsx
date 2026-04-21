@@ -252,13 +252,13 @@ export default function ReviewCard({
       )}
 
       {/* ── Optimized Code ── */}
-      {optimized_code && (
-        <Section
-          title="Optimized Code"
-          icon={<RiCodeSSlashLine size={16} />}
-          color="#8b5cf6"
-          bg="rgba(139, 92, 246, 0.12)"
-        >
+      <Section
+        title="Optimized Code"
+        icon={<RiCodeSSlashLine size={16} />}
+        color="#8b5cf6"
+        bg="rgba(139, 92, 246, 0.12)"
+      >
+        {optimized_code ? (
           <div className="rounded-xl overflow-hidden border border-slate-700/50">
             <div className="flex items-center justify-between px-4 py-2 bg-slate-800/50 border-b border-slate-700/50">
               <span className="text-xs font-bold text-violet-400">Improved Version</span>
@@ -270,8 +270,15 @@ export default function ReviewCard({
               </code>
             </div>
           </div>
-        </Section>
-      )}
+        ) : (
+          <div className="flex items-center gap-2 py-2">
+            <div className="w-7 h-7 rounded-full bg-violet-500/15 flex items-center justify-center">
+              <RiCheckLine size={14} className="text-violet-400" />
+            </div>
+            <p className="text-sm text-[var(--text-secondary)] font-medium">The code is already well-optimized and requires no structural changes.</p>
+          </div>
+        )}
+      </Section>
 
       {/* ── Explanation ── */}
       <Section
@@ -302,11 +309,12 @@ export default function ReviewCard({
           <div className="space-y-3">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {issues.map((issue: any, i: number) => {
-              // Handle both field mappings: (severity/description) or (issue/explanation)
-              const severity = issue.severity || 'medium';
-              const description = issue.description || issue.issue || 'Unknown issue';
-              const type = issue.type || 'bug';
-              const suggestion = issue.suggestion || issue.explanation || '';
+              // Handle string fallback for old cached data, or object fields
+              const isString = typeof issue === 'string';
+              const severity = isString ? 'medium' : (issue.severity || 'medium');
+              const description = isString ? issue : (issue.description || issue.issue || 'Unknown issue');
+              const type = isString ? 'bug' : (issue.type || 'bug');
+              const suggestion = isString ? '' : (issue.suggestion || issue.explanation || '');
               
               return (
                 <div
@@ -356,11 +364,12 @@ export default function ReviewCard({
           <div className="space-y-3">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {improvements.map((imp: any, i: number) => {
-              // Handle both field mappings: (area/current/suggested) or (suggestion/impact)
-              const area = imp.area || 'general';
-              const suggestion = imp.suggested || imp.suggestion || '';
-              const current = imp.current || '';
-              const impact = imp.impact || '';
+              // Handle string fallback for old cached data, or object fields
+              const isString = typeof imp === 'string';
+              const area = isString ? 'general' : (imp.area || 'general');
+              const suggestion = isString ? imp : (imp.suggested || imp.suggestion || '');
+              const current = isString ? '' : (imp.current || '');
+              const impact = isString ? '' : (imp.impact || '');
               
               return (
                 <div

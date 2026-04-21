@@ -52,7 +52,7 @@ const SYSTEM_PROMPT = `You are an expert software engineer and code reviewer. Yo
 CRITICAL RULES:
 1. Analyze the EXACT code provided - NOT generic patterns
 2. Every response MUST be specific to THIS code
-3. If code is identical to input, return error - NEVER submit unchanged code
+3. The optimized code MUST be different from the input code. Provide meaningful refactoring, type checking, edge-case handling, or best practice implementations. If the code is perfectly optimal, add explanatory comments/JSDoc instead of returning identical code. NEVER return exactly unchanged code.
 4. Generate real test cases that actually test THIS code's logic
 5. Return STRICTLY valid JSON (no markdown, no explanation text outside JSON)`;
 
@@ -69,9 +69,18 @@ ANALYZE and return STRICTLY this JSON (no other text):
 
 {
   "issues": [
-    "specific issue 1 in THIS code",
-    "specific issue 2 in THIS code",
-    "specific issue N in THIS code"
+    {
+      "description": "Specific issue description in THIS code",
+      "severity": "high/medium/low",
+      "type": "bug/performance/security/style",
+      "suggestion": "How to fix it"
+    }
+  ],
+  "improvements": [
+    {
+      "suggestion": "Specific improvement for THIS code",
+      "impact": "What this improves (e.g. readability, performance)"
+    }
   ],
   "optimized_code": "improved version (MUST be different from input, NOT identical)",
   "explanation": "why this specific optimization is better for this code",
@@ -99,12 +108,12 @@ ANALYZE and return STRICTLY this JSON (no other text):
 }
 
 REQUIREMENTS:
-- issues: MUST be specific to THIS code (not generic)
-- optimized_code: MUST be functionally equivalent but improved
+- issues: MUST be specific to THIS code (not generic) and an array of objects
+- improvements: MUST be specific suggestions
+- optimized_code: MUST be functionally equivalent but improved (add JSDoc/comments if no logic changes needed)
 - complexity: MUST analyze actual algorithm complexity
 - edge_cases: MUST depend on logic (if array code, include empty array, null, etc.)
 - test_cases: MUST actually test the function/logic
-- If optimized code identical to input: INVALID - MUST change it
 - Return ONLY JSON, no markdown, no code blocks
 `;
 };
@@ -355,8 +364,18 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
         console.warn(`[AI] To disable: set ENABLE_DEMO_MODE=false in .env`);
         rawContent = JSON.stringify({
           issues: [
-            'Missing input validation - the function doesn\'t check if input is an array',
-            'No type checking for non-numeric values in the array'
+            {
+              description: 'Missing input validation - the function doesn\'t check if input is an array',
+              severity: 'high',
+              type: 'bug',
+              suggestion: 'Add array type check at the beginning of the function'
+            },
+            {
+              description: 'No type checking for non-numeric values in the array',
+              severity: 'medium',
+              type: 'bug',
+              suggestion: 'Add a check to verify all elements are numeric before processing'
+            }
           ],
           improvements: [
             {suggestion: 'Use reduce() method for cleaner code', impact: 'Improves readability and performance'},
@@ -505,7 +524,7 @@ const sanitizeResponse = (raw, originalCode) => {
 
   return {
     issues: Array.isArray(raw.issues)
-      ? raw.issues.filter(i => i && String(i).length > 5).slice(0, 15)
+      ? raw.issues.filter(i => i).slice(0, 15)
       : [],
     improvements: Array.isArray(raw.improvements)
       ? raw.improvements.slice(0, 15).map((imp) => ({

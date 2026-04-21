@@ -130,11 +130,12 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
         ) : (
           <div className="space-y-4">
             {result.issues.map((issue: any, i: number) => {
-              // Handle both field mappings: (severity/description) or (issue/explanation)
-              const severity = issue.severity || 'medium';
-              const description = issue.description || issue.issue || 'Unknown issue';
-              const type = issue.type || 'bug';
-              const suggestion = issue.suggestion || issue.explanation || '';
+              // Handle string fallback for old cached data, or object fields
+              const isString = typeof issue === 'string';
+              const severity = isString ? 'medium' : (issue.severity || 'medium');
+              const description = isString ? issue : (issue.description || issue.issue || 'Unknown issue');
+              const type = isString ? 'bug' : (issue.type || 'bug');
+              const suggestion = isString ? '' : (issue.suggestion || issue.explanation || '');
               
               return (
                 <div key={i} className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
@@ -178,11 +179,12 @@ export default function ReviewResults({ result, processingTime }: ReviewResultsP
         ) : (
           <div className="space-y-4">
             {result.improvements.map((imp: any, i: number) => {
-              // Handle both field mappings: (area/current/suggested) or (suggestion/impact)
-              const area = imp.area || 'general';
-              const suggestion = imp.suggested || imp.suggestion || '';
-              const current = imp.current || '';
-              const impact = imp.impact || '';
+              // Handle string fallback for old cached data, or object fields
+              const isString = typeof imp === 'string';
+              const area = isString ? 'general' : (imp.area || 'general');
+              const suggestion = isString ? imp : (imp.suggested || imp.suggestion || '');
+              const current = isString ? '' : (imp.current || '');
+              const impact = isString ? '' : (imp.impact || '');
               
               return (
                 <div key={i} className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
