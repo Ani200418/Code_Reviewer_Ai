@@ -47,46 +47,66 @@ const getGeminiClient = () => {
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a senior software engineer and code reviewer. Your job is to provide SPECIFIC, ACTIONABLE code analysis.
+const SYSTEM_PROMPT = `You are an expert software engineer and code reviewer. Your ONLY job is to analyze the provided code and return structured JSON analysis.
 
 CRITICAL RULES:
-1. Analyze the EXACT code provided - DO NOT give generic answers
-2. If you find issues, list them SPECIFICALLY for THIS code
-3. Optimized code MUST be different from original - improve it by:
-   - Better variable naming
-   - Improved logic/algorithm
-   - Error handling
-   - Type safety
-   - Performance optimization
-4. If code has no issues, still optimize it (better practices, readability)
-5. Each code snippet gets UNIQUE analysis - NEVER repeat previous responses
-
-Return STRICTLY valid JSON (no markdown, no code blocks):
-{"issues":[{"d":"specific problem in THIS code","fix":"exact solution for THIS problem"}],"improvements":[{"s":"specific improvement for THIS code","impact":"measurable benefit"}],"optimized_code":"actual improved code (MUST be different from input)","explanation":"why this specific code was optimized this way","score":{"o":1-100,"r":1-100,"e":1-100,"b":1-100}}`;
+1. Analyze the EXACT code provided - NOT generic patterns
+2. Every response MUST be specific to THIS code
+3. If code is identical to input, return error - NEVER submit unchanged code
+4. Generate real test cases that actually test THIS code's logic
+5. Return STRICTLY valid JSON (no markdown, no explanation text outside JSON)`;
 
 const buildPrompt = (code, language, targetLanguage) => {
-  const target = targetLanguage ? ` Convert to ${targetLanguage}.` : '';
-  return `Language: ${language}${target}
+  const target = targetLanguage ? `\n\nCODE CONVERSION: Convert to ${targetLanguage}` : '';
+  
+  return `You are analyzing this ${language} code:
 
-Analyze this SPECIFIC code:
-
-\`\`\`${language}
+<CODE>
 ${code}
-\`\`\`
+</CODE>${target}
 
-You MUST:
-1. Find SPECIFIC issues in THIS exact code (not generic warnings)
-2. Provide an OPTIMIZED version that is DIFFERENT from the input
-3. Explain WHY you optimized it this specific way
-4. Give scores for: overall quality (o), readability (r), efficiency (e), best practices (b)
+ANALYZE and return STRICTLY this JSON (no other text):
 
-Focus on:
-- Input validation & error handling
-- Performance & complexity
-- Code readability
-- Security issues
-- Memory usage
-- Edge cases`;
+{
+  "issues": [
+    "specific issue 1 in THIS code",
+    "specific issue 2 in THIS code",
+    "specific issue N in THIS code"
+  ],
+  "optimized_code": "improved version (MUST be different from input, NOT identical)",
+  "explanation": "why this specific optimization is better for this code",
+  "complexity": {
+    "time": "time complexity (e.g., O(n), O(n²))",
+    "space": "space complexity (e.g., O(1), O(n))"
+  },
+  "edge_cases": [
+    "edge case 1 specific to this logic",
+    "edge case 2 specific to this logic"
+  ],
+  "test_cases": [
+    {
+      "input": "specific input for this code",
+      "expected_output": "expected output",
+      "description": "what this tests"
+    }
+  ],
+  "score": {
+    "overall": 1-100,
+    "readability": 1-100,
+    "efficiency": 1-100,
+    "best_practices": 1-100
+  }
+}
+
+REQUIREMENTS:
+- issues: MUST be specific to THIS code (not generic)
+- optimized_code: MUST be functionally equivalent but improved
+- complexity: MUST analyze actual algorithm complexity
+- edge_cases: MUST depend on logic (if array code, include empty array, null, etc.)
+- test_cases: MUST actually test the function/logic
+- If optimized code identical to input: INVALID - MUST change it
+- Return ONLY JSON, no markdown, no code blocks
+`;
 };
 
 // ─── Call OpenAI API ─────────────────────────────────────────────────────────
@@ -96,13 +116,13 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
   const model = process.env.OPENAI_MODEL || 'gpt-4o';
 
   console.log(`[OpenAI] Calling ${model}...`);
-  console.log(`[OpenAI] Code to analyze (${cleanedCode.length} chars): ${cleanedCode.substring(0, 100)}...`);
+  console.log(`[OpenAI] Code received (${cleanedCode.length} chars)`);
   
   try {
     const response = await client.chat.completions.create({
       model,
-      max_tokens: 2000,
-      temperature: 0.1,
+      max_tokens: 2500,
+      temperature: 0.2,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -111,9 +131,22 @@ const callOpenAI = async (cleanedCode, language, targetLanguage) => {
     });
 
     const content = response.choices[0]?.message?.content;
-    console.log(`[OpenAI] ✅ Got response (${content?.length || 0} chars)`);
-    console.log(`[OpenAI] Response preview: ${content?.substring(0, 150)}...`);
-    return content?.trim() || '';
+    
+    // Validate response
+    if (!content || content.length < 100) {
+      console.warn(`[OpenAI] ⚠️  Response too short (${content?.length || 0} chars) - likely generic`);
+      return '';
+    }
+
+    console.log(`[OpenAI] ✅ Got response (${content.length} chars)`);
+    
+    // Check for generic phrases
+    const genericPhrases = ['this code can be improved', 'consider adding', 'best practice'];
+    if (genericPhrases.some(p => content.toLowerCase().includes(p))) {
+      console.warn(`[OpenAI] ⚠️  Generic response detected`);
+    }
+
+    return content.trim();
   } catch (err) {
     console.error(`[OpenAI] ❌ Error: ${err.message}`);
     throw err;
@@ -127,30 +160,32 @@ const callGroq = async (cleanedCode, language, targetLanguage) => {
   if (!client) throw new Error('Groq API key not configured');
 
   console.log(`[Groq] Calling llama-3.3-70b-versatile...`);
-  console.log(`[Groq] Code to analyze (${cleanedCode.length} chars): ${cleanedCode.substring(0, 100)}...`);
+  console.log(`[Groq] Code received (${cleanedCode.length} chars)`);
   
   try {
     const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      max_tokens: 2000,
-      temperature: 0.1,
+      max_tokens: 2500,
+      temperature: 0.2,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
       ],
     });
 
-    console.log(`[Groq] Response status: ${response.status || 'ok'}`);
-    
     const content = response.choices[0]?.message?.content;
-    console.log(`[Groq] ✅ Got response (${content?.length || 0} chars)`);
-    console.log(`[Groq] Response preview: ${content?.substring(0, 150)}...`);
     
     if (!content) {
       console.error('[Groq] ❌ No content in response!');
       return '';
     }
-    
+
+    if (content.length < 100) {
+      console.warn(`[Groq] ⚠️  Response too short (${content.length} chars) - likely generic`);
+      return '';
+    }
+
+    console.log(`[Groq] ✅ Got response (${content.length} chars)`);
     return content.trim();
   } catch (err) {
     console.error(`[Groq] ❌ Error:`, err.message);
@@ -165,7 +200,7 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
   if (!client) throw new Error('Gemini API key not configured');
 
   console.log(`[Gemini] Calling gemini-2.0-flash...`);
-  console.log(`[Gemini] Code to analyze (${cleanedCode.length} chars): ${cleanedCode.substring(0, 100)}...`);
+  console.log(`[Gemini] Code received (${cleanedCode.length} chars)`);
   
   try {
     const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
@@ -178,8 +213,12 @@ const callGemini = async (cleanedCode, language, targetLanguage) => {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const content = jsonMatch ? jsonMatch[0].trim() : '';
     
+    if (!content || content.length < 100) {
+      console.warn(`[Gemini] ⚠️  Response too short (${content?.length || 0} chars) - likely generic`);
+      return '';
+    }
+
     console.log(`[Gemini] ✅ Got response (${content.length} chars)`);
-    console.log(`[Gemini] Response preview: ${content.substring(0, 150)}...`);
     return content;
   } catch (err) {
     console.error(`[Gemini] ❌ Error: ${err.message}`);
@@ -316,16 +355,37 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
         console.warn(`[AI] To disable: set ENABLE_DEMO_MODE=false in .env`);
         rawContent = JSON.stringify({
           issues: [
-            { d: 'Missing input validation', fix: 'Add parameter validation at function start' },
-            { d: 'No error handling', fix: 'Wrap logic in try-catch blocks' },
+            'Missing input validation - the function doesn\'t check if input is an array',
+            'No type checking for non-numeric values in the array'
           ],
           improvements: [
-            { s: 'Add JSDoc comments', impact: 'Improves code maintainability' },
-            { s: 'Consider using const/let instead of var', impact: 'Better scope management' },
+            {suggestion: 'Use reduce() method for cleaner code', impact: 'Improves readability and performance'},
+            {suggestion: 'Add JSDoc documentation', impact: 'Better code maintainability'}
           ],
-          optimized_code: code,
-          explanation: 'This code works correctly. Consider adding input validation and error handling for production use.',
-          score: { o: 65, r: 70, e: 60, b: 55 },
+          optimized_code: 'function arraySum(arr){if(!Array.isArray(arr))throw new Error("Input must be array");if(!arr.every(Number.isFinite))throw new Error("All values must be numbers");return arr.reduce((acc,val)=>acc+val,0);}',
+          explanation: 'The original code uses a manual loop which is less efficient than reduce(). Added input validation to handle edge cases like non-array inputs or non-numeric values.',
+          complexity: {
+            time: 'O(n) - single pass through the array',
+            space: 'O(1) - no extra space used'
+          },
+          edge_cases: [
+            'Empty array - should return 0',
+            'Array with null/undefined - should throw error',
+            'Array with non-numeric values - should throw error',
+            'Non-array input - should throw error'
+          ],
+          test_cases: [
+            {input: '[1,2,3]', expected_output: '6', description: 'Basic array sum'},
+            {input: '[]', expected_output: '0', description: 'Empty array edge case'},
+            {input: '[1,"test",3]', expected_output: 'Error', description: 'Non-numeric value handling'},
+            {input: 'null', expected_output: 'Error', description: 'Non-array input'}
+          ],
+          score: {
+            overall: 72,
+            readability: 75,
+            efficiency: 70,
+            best_practices: 70
+          }
         });
       } else {
         const err = new Error(
@@ -365,8 +425,31 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
         .trim();
     }
 
+    console.log(`[AI] 📋 Parsing JSON response (${cleaned.length} chars)...`);
+    
     const JSON5 = require('json5');
-    const parsed = JSON5.parse(cleaned);
+    let parsed;
+    
+    try {
+      parsed = JSON5.parse(cleaned);
+    } catch (parseErr) {
+      console.error('[AI] ❌ JSON5 parse failed, trying standard JSON...');
+      console.error('[AI] Parse error:', parseErr.message);
+      console.error('[AI] Raw content preview:', cleaned.substring(0, 200));
+      
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (standardErr) {
+        console.error('[AI] ❌ Standard JSON parse also failed');
+        throw new Error(
+          `Failed to parse AI response as JSON. Response: ${cleaned.substring(0, 300)}`
+        );
+      }
+    }
+
+    console.log(`[AI] ✅ JSON parsed successfully`);
+    console.log(`[AI] Response has: issues=${Array.isArray(parsed.issues) ? parsed.issues.length : 0}, test_cases=${Array.isArray(parsed.test_cases) ? parsed.test_cases.length : 0}, edge_cases=${Array.isArray(parsed.edge_cases) ? parsed.edge_cases.length : 0}`);
+    
     return sanitizeResponse(parsed, cleanedCode);
   } catch (err) {
     if (err instanceof SyntaxError) {
@@ -384,57 +467,73 @@ const sanitizeResponse = (raw, originalCode) => {
   const str = (v) => String(v || '').slice(0, 5000);
   const largeStr = (v) => String(v || '');
 
-  // Map shortened field names from optimized prompt to schema names
   let optimizedCode = largeStr(raw.optimized_code);
 
-  // 🔍 VALIDATION: Check if optimized code is identical to original
+  // 🔍 CRITICAL VALIDATION: Check if optimized code is identical to original
   if (optimizedCode && originalCode) {
-    // Normalize both codes (remove extra whitespace for comparison)
     const normalize = (c) => c.replace(/\s+/g, ' ').trim();
     const originalNorm = normalize(originalCode);
     const optimizedNorm = normalize(optimizedCode);
     
     if (originalNorm === optimizedNorm) {
-      console.warn('⚠️  WARNING: Optimized code is identical to original!');
-      console.warn('⚠️  This suggests generic response or API not analyzing properly');
+      console.error('❌ WARNING: Optimized code IDENTICAL to original!');
+      console.error('This response will be rejected as invalid');
+      console.error('Original:', originalNorm.substring(0, 60));
+      console.error('Optimized:', optimizedNorm.substring(0, 60));
       
-      // Force a better optimized version with basic improvements
-      optimizedCode = optimizedCode
-        .replace(/function\s+/g, 'const ') // Convert to arrow functions
-        .replace(/var\s+/g, 'const ') // Replace var with const
-        || originalCode; // Fallback to original if transformation fails
+      // Mark as invalid by clearing optimized_code
+      optimizedCode = '';
     }
   }
 
+  // Validate required fields exist
+  if (!raw.issues || !Array.isArray(raw.issues)) {
+    console.warn('⚠️  Missing issues array');
+  }
+  if (!raw.optimized_code || raw.optimized_code.length === 0) {
+    console.warn('⚠️  Missing or empty optimized_code');
+  }
+  if (!raw.explanation || raw.explanation.length < 20) {
+    console.warn('⚠️  Missing or too-short explanation');
+  }
+  if (!raw.edge_cases || !Array.isArray(raw.edge_cases) || raw.edge_cases.length === 0) {
+    console.warn('⚠️  Missing edge_cases');
+  }
+  if (!raw.test_cases || !Array.isArray(raw.test_cases) || raw.test_cases.length === 0) {
+    console.warn('⚠️  Missing test_cases');
+  }
+
   return {
-    // Schema expects: issues = [{issue, explanation}]
     issues: Array.isArray(raw.issues)
-      ? raw.issues.slice(0, 15).map((i) => ({
-          issue: str(i.d || i.description || i.issue),
-          explanation: str(i.fix || i.suggestion || i.explanation),
-        }))
+      ? raw.issues.filter(i => i && String(i).length > 5).slice(0, 15)
       : [],
-    // Schema expects: improvements = [{suggestion, impact}]
     improvements: Array.isArray(raw.improvements)
       ? raw.improvements.slice(0, 15).map((imp) => ({
-          suggestion: str(imp.s || imp.suggested || imp.suggestion),
-          impact: str(imp.impact),
+          suggestion: str(imp.s || imp.suggested || imp.suggestion || imp),
+          impact: str(imp.impact || ''),
         }))
       : [],
     optimized_code: optimizedCode || '',
-    explanation: str(raw.explanation || 'Code analysis complete'),
-    edge_cases: Array.isArray(raw.edge_cases) ? raw.edge_cases.slice(0, 10).map(str) : [],
+    explanation: str(raw.explanation || ''),
+    edge_cases: Array.isArray(raw.edge_cases) 
+      ? raw.edge_cases.filter(e => e && String(e).length > 3).slice(0, 10)
+      : [],
     test_cases: Array.isArray(raw.test_cases)
       ? raw.test_cases.slice(0, 10).map((t) => ({
           input: str(t.input || t.i || ''),
-          expected_output: str(t.expected_output || t.o || ''),
+          expected_output: str(t.expected_output || t.output || t.o || ''),
+          description: str(t.description || t.desc || ''),
         }))
       : [],
+    complexity: {
+      time: str(raw.complexity?.time || raw.time_complexity || ''),
+      space: str(raw.complexity?.space || raw.space_complexity || ''),
+    },
     score: {
-      overall:       clamp(raw.score?.o ?? raw.score?.overall ?? 0),
-      readability:   clamp(raw.score?.r ?? raw.score?.readability ?? 0),
-      efficiency:    clamp(raw.score?.e ?? raw.score?.efficiency ?? 0),
-      best_practices: clamp(raw.score?.b ?? raw.score?.best_practices ?? 0),
+      overall: clamp(raw.score?.overall ?? raw.score?.o ?? 0),
+      readability: clamp(raw.score?.readability ?? raw.score?.r ?? 0),
+      efficiency: clamp(raw.score?.efficiency ?? raw.score?.e ?? 0),
+      best_practices: clamp(raw.score?.best_practices ?? raw.score?.b ?? 0),
     },
     converted_code: largeStr(raw.converted_code || ''),
   };
