@@ -13,21 +13,56 @@ const api = axios.create({
   },
 });
 
+// ─── Request interceptor ──────────────────────────────────────────────────────
+// Reads the JWT token fresh from cookies on EVERY request.
+// This eliminates the race condition where AuthContext's useEffect hasn't
+// run yet when the first API call fires, causing a missing Authorization header.
+api.interceptors.request.use(
+  (config) => {
+    // Read token from cookie on every call (works before AuthContext hydrates)
+    const cookieToken = typeof document !== 'undefined'
+      ? document.cookie
+          .split('; ')
+          .find((row) => row.startsWith('acr_token='))
+          ?.split('=')[1]
+      : null;
+
+    const token = cookieToken || (typeof window !== 'undefined'
+      ? api.defaults.headers.common['Authorization']?.toString().replace('Bearer ', '')
+      : null);
+
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // ─── Response interceptor ─────────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Token expired — clean up and redirect
+    // Token expired or invalid — clean up and redirect to login
     if (error.response?.status === 401) {
       const isAuthRoute =
-        window.location.pathname === '/login' ||
-        window.location.pathname === '/signup';
+        typeof window !== 'undefined' && (
+          window.location.pathname === '/login' ||
+          window.location.pathname === '/signup'
+        );
 
       if (!isAuthRoute) {
         // Clear stale auth data
-        document.cookie = 'acr_token=; Max-Age=0; path=/';
-        localStorage.removeItem('acr_user');
-        window.location.href = '/login';
+        if (typeof document !== 'undefined') {
+          document.cookie = 'acr_token=; Max-Age=0; path=/';
+        }
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('acr_user');
+        }
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
       }
     }
 
@@ -36,3 +71,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+
