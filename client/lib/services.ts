@@ -8,17 +8,18 @@ import api from './api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface Issue {
+  issue: string;            // The issue description (stored field)
+  explanation: string;      // Additional explanation
   severity: 'high' | 'medium' | 'low';
   type: 'bug' | 'performance' | 'security' | 'style';
-  description: string;
-  line: string;
-  suggestion: string;
+  suggestion: string;       // Concrete fix suggestion
+  // Legacy compatibility
+  description?: string;
+  line?: string;
 }
 
 export interface Improvement {
-  area: 'readability' | 'efficiency' | 'maintainability' | 'best_practices';
-  current: string;
-  suggested: string;
+  suggestion: string;
   impact: string;
 }
 
@@ -26,6 +27,7 @@ export interface TestCase {
   description: string;
   input: string;
   expected_output: string;
+  category: 'normal' | 'edge' | 'corner';
 }
 
 export interface Score {
@@ -35,7 +37,13 @@ export interface Score {
   best_practices: number;
 }
 
+export interface Complexity {
+  time: string;
+  space: string;
+}
+
 export interface AIResponse {
+  quality_analysis: string;
   issues: Issue[];
   improvements: Improvement[];
   explanation: string;
@@ -43,6 +51,7 @@ export interface AIResponse {
   test_cases: TestCase[];
   optimized_code: string;
   converted_code: string;
+  complexity: Complexity;
   score: Score;
 }
 

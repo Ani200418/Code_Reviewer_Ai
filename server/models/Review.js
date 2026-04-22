@@ -9,8 +9,11 @@ const mongoose = require('mongoose');
 
 const bugSchema = new mongoose.Schema(
   {
-    issue: { type: String, required: true },
-    explanation: { type: String, required: true },
+    issue:       { type: String, required: true },
+    explanation: { type: String, default: '' },
+    severity:    { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
+    type:        { type: String, enum: ['bug', 'performance', 'security', 'style'], default: 'bug' },
+    suggestion:  { type: String, default: '' },
   },
   { _id: false }
 );
@@ -25,8 +28,18 @@ const optimizationSchema = new mongoose.Schema(
 
 const testCaseSchema = new mongoose.Schema(
   {
-    input: { type: String, required: true },
+    input:           { type: String, required: true },
     expected_output: { type: String, required: true },
+    description:     { type: String, default: '' },
+    category:        { type: String, enum: ['normal', 'edge', 'corner'], default: 'normal' },
+  },
+  { _id: false }
+);
+
+const complexitySchema = new mongoose.Schema(
+  {
+    time: { type: String, default: '' },
+    space: { type: String, default: '' },
   },
   { _id: false }
 );
@@ -43,14 +56,16 @@ const scoreSchema = new mongoose.Schema(
 
 const aiResponseSchema = new mongoose.Schema(
   {
-    issues: [bugSchema],
-    improvements: [optimizationSchema],
-    optimized_code: { type: String, default: '' },
-    explanation: { type: String, default: '' },
-    edge_cases: [{ type: String }],
-    test_cases: [testCaseSchema],
-    score: scoreSchema,
-    converted_code: { type: String, default: '' },
+    quality_analysis: { type: String, default: '' },
+    issues:           [bugSchema],
+    improvements:     [optimizationSchema],
+    optimized_code:   { type: String, default: '' },
+    explanation:      { type: String, default: '' },
+    edge_cases:       [{ type: String }],
+    test_cases:       [testCaseSchema],
+    complexity:       { type: complexitySchema, default: () => ({}) },
+    score:            scoreSchema,
+    converted_code:   { type: String, default: '' },
   },
   { _id: false }
 );

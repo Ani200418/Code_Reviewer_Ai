@@ -96,8 +96,8 @@ export default function HistoryDetailPage() {
               <div className="p-4 space-y-3">
                 {aiResponse.issues.map((issue, i) => (
                   <div key={i} className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
-                    <p className="text-red-400 font-semibold text-sm">{(issue as any).issue || issue.description}</p>
-                    <p className="text-slate-400 text-sm mt-1">{(issue as any).explanation || issue.suggestion}</p>
+                    <p className="text-red-400 font-semibold text-sm">{issue.issue || (issue as any).description}</p>
+                    <p className="text-slate-400 text-sm mt-1">{issue.suggestion || issue.explanation}</p>
                   </div>
                 ))}
               </div>
@@ -113,7 +113,7 @@ export default function HistoryDetailPage() {
               <div className="p-4 space-y-3">
                 {aiResponse.improvements.map((imp, i) => (
                   <div key={i} className="p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
-                    <p className="text-yellow-400 font-semibold text-sm">{(imp as any).suggestion || imp.suggested}</p>
+                    <p className="text-yellow-400 font-semibold text-sm">{imp.suggestion || (imp as any).suggested}</p>
                     <p className="text-slate-400 text-sm mt-1">{imp.impact}</p>
                   </div>
                 ))}
@@ -148,10 +148,22 @@ export default function HistoryDetailPage() {
             </div>
           )}
 
+          {/* Quality Analysis */}
+          {aiResponse.quality_analysis && (
+            <div className="card-glow p-5">
+              <h3 className="font-bold text-purple-400 mb-3 text-sm flex items-center gap-2">
+                <RiMagicLine size={16} /> Quality Analysis
+              </h3>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                {aiResponse.quality_analysis}
+              </p>
+            </div>
+          )}
+
           {/* Explanation Card */}
           {aiResponse.explanation && (
             <div className="card-glow p-5">
-              <h3 className="font-bold text-white mb-3 text-sm">Summary</h3>
+              <h3 className="font-bold text-white mb-3 text-sm">Step-by-step Explanation</h3>
               <p className="text-slate-400 text-sm leading-relaxed">
                 {aiResponse.explanation}
               </p>

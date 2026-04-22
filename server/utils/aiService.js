@@ -1,22 +1,21 @@
 /**
  * AI Service Utility
- * Multi-API support: OpenAI (primary) + Groq (fallback)
- * Uses Promise.race() to return fastest valid response
+ * Multi-API support: OpenAI (primary) → Gemini (fallback) → Groq (last resort)
+ * Enforces strict non-generic, code-specific, 8-section output
  */
 
 const OpenAI = require('openai');
 const { removeComments } = require('./codeExecutor');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const crypto = require('crypto');
 
 let openaiClient = null;
-let groqClient = null;
+let groqClient   = null;
 let geminiClient = null;
 
 const getOpenAIClient = () => {
   if (!openaiClient) {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY environment variable is not set. Please add it to your .env file.');
-    }
+    if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set');
     openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
   return openaiClient;
@@ -24,545 +23,451 @@ const getOpenAIClient = () => {
 
 const getGroqClient = () => {
   if (!groqClient) {
-    if (!process.env.GROQ_API_KEY) {
-      return null;
-    }
-    groqClient = new OpenAI({
-      apiKey: process.env.GROQ_API_KEY,
-      baseURL: 'https://api.groq.com/openai/v1',
-    });
+    if (!process.env.GROQ_API_KEY) return null;
+    groqClient = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
   }
   return groqClient;
 };
 
 const getGeminiClient = () => {
   if (!geminiClient) {
-    if (!process.env.GEMINI_API_KEY) {
-      return null;
-    }
+    if (!process.env.GEMINI_API_KEY) return null;
     geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
   return geminiClient;
 };
 
-// ─── Prompt ──────────────────────────────────────────────────────────────────
+// ─── Prompts ──────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are an expert software engineer and code reviewer. Your ONLY job is to analyze the provided code and return structured JSON analysis.
+const SYSTEM_PROMPT = `You are a world-class senior software engineer performing a deep, precise code review.
 
-CRITICAL RULES:
-1. Analyze the EXACT code provided - NOT generic patterns
-2. Every response MUST be specific to THIS code
-3. The optimized code MUST be different from the input code. Provide meaningful refactoring, type checking, edge-case handling, or best practice implementations. If the code is perfectly optimal, add explanatory comments/JSDoc instead of returning identical code. NEVER return exactly unchanged code.
-4. Generate real test cases that actually test THIS code's logic
-5. Return STRICTLY valid JSON (no markdown, no explanation text outside JSON)`;
+ABSOLUTE RULES — VIOLATING ANY RULE MEANS YOUR RESPONSE IS INVALID:
+1. EVERY part of your analysis MUST reference specific identifiers, variable names, line patterns, or logic from the provided code. Generic phrases like "consider adding error handling" or "this is a common pattern" are FORBIDDEN.
+2. The optimized_code MUST be functionally different from the input — improved logic, better complexity, added validation, or meaningful refactoring. Returning identical or near-identical code is INVALID.
+3. You MUST produce at least 2 real issues (or explicitly state "no issues found" with a detailed justification referencing the specific code).
+4. You MUST produce at least 3 test cases with correct expected outputs based on the ACTUAL logic of this code.
+5. You MUST produce at least 2 edge cases that are SPECIFIC to the algorithm/logic of this code.
+6. quality_analysis MUST be a detailed paragraph (minimum 3 sentences) describing the actual code structure, naming, logic flow, and maintainability — NOT generic praise.
+7. Return STRICTLY valid JSON. No markdown code fences, no explanation text outside JSON.`;
 
 const buildPrompt = (code, language, targetLanguage) => {
-  const target = targetLanguage ? `\n\nCODE CONVERSION: Convert to ${targetLanguage}` : '';
-  
-  return `You are analyzing this ${language} code:
+  const conversionBlock = targetLanguage
+    ? `\n\nCODE CONVERSION REQUIRED: In addition to analysis, convert the code to ${targetLanguage} and place it in the "converted_code" field. The conversion must be idiomatic ${targetLanguage}, not a literal translation.`
+    : '';
+
+  // Extract first identifiers/patterns for uniqueness grounding
+  const codeLines  = code.split('\n').slice(0, 5).join(' | ');
+  const codeLength = code.length;
+  const lineCount  = code.split('\n').length;
+
+  return `Analyze this ${language} code (${lineCount} lines, ${codeLength} chars). First lines: "${codeLines}"
 
 <CODE>
 ${code}
-</CODE>${target}
+</CODE>${conversionBlock}
 
-ANALYZE and return STRICTLY this JSON (no other text):
+Return ONLY this JSON object — no other text:
 
 {
+  "quality_analysis": "A detailed paragraph (3+ sentences) evaluating the readability, structure, naming conventions, modularity, and overall maintainability of THIS specific code. Must cite specific function names, variables, or patterns from the code above.",
+
   "issues": [
     {
-      "description": "Specific issue description in THIS code",
-      "severity": "high/medium/low",
-      "type": "bug/performance/security/style",
-      "suggestion": "How to fix it"
+      "description": "Precise description citing the specific function/variable/line pattern causing this issue",
+      "severity": "high|medium|low",
+      "type": "bug|performance|security|style",
+      "suggestion": "Exact fix with concrete code example referencing this code's identifiers"
     }
   ],
+
   "improvements": [
     {
-      "suggestion": "Specific improvement for THIS code",
-      "impact": "What this improves (e.g. readability, performance)"
+      "suggestion": "Specific improvement actionable for THIS code, naming the relevant construct",
+      "impact": "Concrete impact: e.g. 'reduces time complexity from O(n²) to O(n log n)' or 'eliminates 3 repeated null checks'"
     }
   ],
-  "optimized_code": "improved version (MUST be different from input, NOT identical)",
-  "explanation": "why this specific optimization is better for this code",
+
+  "optimized_code": "The full improved version — must be DIFFERENT from input (better complexity, added validation, cleaner logic, or meaningful refactoring). NEVER return the original unchanged.",
+
+  "explanation": "Step-by-step walkthrough of how THIS code works: what each major block does, what algorithm/pattern it uses, data flow, and return value semantics.",
+
   "complexity": {
-    "time": "time complexity (e.g., O(n), O(n²))",
-    "space": "space complexity (e.g., O(1), O(n))"
+    "time": "Big-O time complexity with brief justification referencing the actual loops/recursion in this code",
+    "space": "Big-O space complexity with brief justification"
   },
+
   "edge_cases": [
-    "edge case 1 specific to this logic",
-    "edge case 2 specific to this logic"
+    "Edge case 1 — specific to the data structures or algorithm in this code (e.g. 'Empty array passed to the inner loop at line N causes...')",
+    "Edge case 2 — another meaningful boundary condition for this specific logic"
   ],
+
   "test_cases": [
     {
-      "input": "specific input for this code",
-      "expected_output": "expected output",
-      "description": "what this tests"
+      "input": "Concrete input values for this function/program",
+      "expected_output": "The exact output this code produces for the given input",
+      "description": "What scenario this tests",
+      "category": "normal"
+    },
+    {
+      "input": "A boundary/edge input relevant to this code's logic",
+      "expected_output": "Expected result at the boundary",
+      "description": "What boundary this tests",
+      "category": "edge"
+    },
+    {
+      "input": "An unusual or extreme input that stresses the logic",
+      "expected_output": "Expected result or error",
+      "description": "Why this is a corner case for this code",
+      "category": "corner"
     }
   ],
+
   "score": {
-    "overall": 1-100,
-    "readability": 1-100,
-    "efficiency": 1-100,
-    "best_practices": 1-100
-  }
+    "overall": <integer 0-100>,
+    "readability": <integer 0-100>,
+    "efficiency": <integer 0-100>,
+    "best_practices": <integer 0-100>
+  },
+
+  "converted_code": ""
 }
 
-REQUIREMENTS:
-- issues: MUST be specific to THIS code (not generic) and an array of objects
-- improvements: MUST be specific suggestions
-- optimized_code: MUST be functionally equivalent but improved (add JSDoc/comments if no logic changes needed)
-- complexity: MUST analyze actual algorithm complexity
-- edge_cases: MUST depend on logic (if array code, include empty array, null, etc.)
-- test_cases: MUST actually test the function/logic
-- Return ONLY JSON, no markdown, no code blocks
+CHECKLIST BEFORE RESPONDING:
+✓ quality_analysis cites specific names from the code
+✓ Every issue cites a specific construct from the code
+✓ optimized_code is meaningfully different from the input
+✓ test_cases have correct expected_output values based on actual code logic
+✓ edge_cases are specific to THIS algorithm
+✓ No markdown — pure JSON only
 `;
 };
 
-// ─── Call OpenAI API ─────────────────────────────────────────────────────────
+// ─── API callers ──────────────────────────────────────────────────────────────
 
 const callOpenAI = async (cleanedCode, language, targetLanguage) => {
   const client = getOpenAIClient();
-  const model = process.env.OPENAI_MODEL || 'gpt-4o';
+  const model  = process.env.OPENAI_MODEL || 'gpt-4o';
+  console.log(`[OpenAI] Calling ${model} (${cleanedCode.length} chars)...`);
 
-  console.log(`[OpenAI] Calling ${model}...`);
-  console.log(`[OpenAI] Code received (${cleanedCode.length} chars)`);
-  
-  try {
-    const response = await client.chat.completions.create({
-      model,
-      max_tokens: 2500,
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
-      ],
-    });
+  const response = await client.chat.completions.create({
+    model,
+    max_tokens: 3000,
+    temperature: 0.15,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user',   content: buildPrompt(cleanedCode, language, targetLanguage) },
+    ],
+  });
 
-    const content = response.choices[0]?.message?.content;
-    
-    // Validate response
-    if (!content || content.length < 100) {
-      console.warn(`[OpenAI] ⚠️  Response too short (${content?.length || 0} chars) - likely generic`);
-      return '';
-    }
-
-    console.log(`[OpenAI] ✅ Got response (${content.length} chars)`);
-    
-    // Check for generic phrases
-    const genericPhrases = ['this code can be improved', 'consider adding', 'best practice'];
-    if (genericPhrases.some(p => content.toLowerCase().includes(p))) {
-      console.warn(`[OpenAI] ⚠️  Generic response detected`);
-    }
-
-    return content.trim();
-  } catch (err) {
-    console.error(`[OpenAI] ❌ Error: ${err.message}`);
-    throw err;
+  const content = response.choices[0]?.message?.content;
+  if (!content || content.length < 200) {
+    console.warn(`[OpenAI] ⚠️ Response too short (${content?.length || 0} chars)`);
+    return '';
   }
+  console.log(`[OpenAI] ✅ Got response (${content.length} chars)`);
+  return content.trim();
 };
-
-// ─── Call Groq API ──────────────────────────────────────────────────────────
 
 const callGroq = async (cleanedCode, language, targetLanguage) => {
   const client = getGroqClient();
   if (!client) throw new Error('Groq API key not configured');
+  console.log(`[Groq] Calling llama-3.3-70b-versatile (${cleanedCode.length} chars)...`);
 
-  console.log(`[Groq] Calling llama-3.3-70b-versatile...`);
-  console.log(`[Groq] Code received (${cleanedCode.length} chars)`);
-  
-  try {
-    const response = await client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 2500,
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildPrompt(cleanedCode, language, targetLanguage) },
-      ],
-    });
+  const response = await client.chat.completions.create({
+    model:      'llama-3.3-70b-versatile',
+    max_tokens: 3000,
+    temperature: 0.15,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user',   content: buildPrompt(cleanedCode, language, targetLanguage) },
+    ],
+  });
 
-    const content = response.choices[0]?.message?.content;
-    
-    if (!content) {
-      console.error('[Groq] ❌ No content in response!');
-      return '';
-    }
-
-    if (content.length < 100) {
-      console.warn(`[Groq] ⚠️  Response too short (${content.length} chars) - likely generic`);
-      return '';
-    }
-
-    console.log(`[Groq] ✅ Got response (${content.length} chars)`);
-    return content.trim();
-  } catch (err) {
-    console.error(`[Groq] ❌ Error:`, err.message);
-    throw err;
+  const content = response.choices[0]?.message?.content;
+  if (!content || content.length < 200) {
+    console.warn(`[Groq] ⚠️ Response too short (${content?.length || 0} chars)`);
+    return '';
   }
+  console.log(`[Groq] ✅ Got response (${content.length} chars)`);
+  return content.trim();
 };
-
-// ─── Call Gemini API ────────────────────────────────────────────────────────
 
 const callGemini = async (cleanedCode, language, targetLanguage) => {
   const client = getGeminiClient();
   if (!client) throw new Error('Gemini API key not configured');
+  console.log(`[Gemini] Calling gemini-2.0-flash (${cleanedCode.length} chars)...`);
 
-  console.log(`[Gemini] Calling gemini-2.0-flash...`);
-  console.log(`[Gemini] Code received (${cleanedCode.length} chars)`);
-  
-  try {
-    const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const prompt = `${SYSTEM_PROMPT}\n\n${buildPrompt(cleanedCode, language, targetLanguage)}`;
-    
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const content = jsonMatch ? jsonMatch[0].trim() : '';
-    
-    if (!content || content.length < 100) {
-      console.warn(`[Gemini] ⚠️  Response too short (${content?.length || 0} chars) - likely generic`);
-      return '';
-    }
+  const model  = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const prompt = `${SYSTEM_PROMPT}\n\n${buildPrompt(cleanedCode, language, targetLanguage)}`;
+  const result = await model.generateContent(prompt);
+  const text   = result.response.text();
 
-    console.log(`[Gemini] ✅ Got response (${content.length} chars)`);
-    return content;
-  } catch (err) {
-    console.error(`[Gemini] ❌ Error: ${err.message}`);
-    throw err;
+  // Extract JSON from response — Gemini sometimes wraps in markdown
+  let content = text;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) content = jsonMatch[0].trim();
+
+  if (!content || content.length < 200) {
+    console.warn(`[Gemini] ⚠️ Response too short (${content?.length || 0} chars)`);
+    return '';
+  }
+  console.log(`[Gemini] ✅ Got response (${content.length} chars)`);
+  return content;
+};
+
+// ─── Uniqueness guard ─────────────────────────────────────────────────────────
+
+const _recentHashes = new Set();
+
+const checkUniqueness = (rawContent) => {
+  const hash = crypto.createHash('md5').update(rawContent.substring(0, 500)).digest('hex');
+  if (_recentHashes.has(hash)) {
+    console.warn('[AI] ⚠️ DUPLICATE RESPONSE DETECTED — identical to a recent analysis');
+  }
+  _recentHashes.add(hash);
+  if (_recentHashes.size > 20) {
+    const first = _recentHashes.values().next().value;
+    _recentHashes.delete(first);
   }
 };
+
+// ─── Main analyzeCode function ────────────────────────────────────────────────
 
 const analyzeCode = async (code, language, targetLanguage = null) => {
   // Clean comments before analysis
   let cleanedCode = code;
   try {
-    cleanedCode = removeComments(code, language);
-    if (!cleanedCode) {
-      cleanedCode = code;
-    }
-  } catch (err) {
-    console.warn('Comment removal failed, using original code:', err.message);
+    const stripped = removeComments(code, language);
+    if (stripped && stripped.trim()) cleanedCode = stripped;
+  } catch {
     cleanedCode = code;
   }
 
-  // Build array of API calls with retry logic
   const callWithRetry = async (apiFunc, name, retries = 2) => {
     for (let i = 0; i < retries; i++) {
       try {
         console.log(`\n[${name}] 🔄 Attempt ${i + 1}/${retries}...`);
         const result = await apiFunc();
-        console.log(`[${name}] Result length: ${result?.length || 0}`);
-        
-        if (result !== null && result !== undefined && result !== '') {
-          console.log(`[${name}] ✅ SUCCESS - Got response`);
+        if (result && result.trim().length > 0) {
+          console.log(`[${name}] ✅ SUCCESS`);
           return result;
         }
-        
-        console.log(`[${name}] ⚠️  Got empty response, will retry...`);
+        console.log(`[${name}] ⚠️ Empty response, retrying...`);
       } catch (err) {
-        console.error(`[${name}] ❌ Error on attempt ${i + 1}:`, err.message);
+        console.error(`[${name}] ❌ Attempt ${i + 1} error:`, err.message);
         if (i < retries - 1) {
-          const waitTime = 1000 * Math.pow(2, i);
-          console.log(`[${name}] ⏳ Waiting ${waitTime}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          const wait = 1000 * Math.pow(2, i);
+          console.log(`[${name}] ⏳ Waiting ${wait}ms...`);
+          await new Promise(r => setTimeout(r, wait));
         }
       }
     }
-    console.error(`[${name}] 💥 All ${retries} retries exhausted!`);
+    console.error(`[${name}] 💥 All ${retries} retries exhausted`);
     return null;
   };
 
-  // Array of API calls with names
-  // Using sequential fallback strategy: try each API in order, only move to next if it fails
   const apiCalls = [
-    // Try OpenAI first (primary)
-    { 
-      name: 'OpenAI', 
-      call: () => callOpenAI(cleanedCode, language, targetLanguage)
-    },
-    // Try Gemini second (fallback)
-    {
-      name: 'Gemini',
-      call: () => callGemini(cleanedCode, language, targetLanguage)
-    },
-    // Try Groq third (last resort)
-    {
-      name: 'Groq',
-      call: () => callGroq(cleanedCode, language, targetLanguage)
-    },
-  ];
+    { name: 'OpenAI', key: 'OPENAI_API_KEY',  call: () => callOpenAI(cleanedCode, language, targetLanguage) },
+    { name: 'Gemini', key: 'GEMINI_API_KEY',  call: () => callGemini(cleanedCode, language, targetLanguage) },
+    { name: 'Groq',   key: 'GROQ_API_KEY',    call: () => callGroq(cleanedCode, language, targetLanguage)   },
+  ].filter(api => !!process.env[api.key]);
 
-  // Filter out APIs without keys
-  const finalApiCalls = apiCalls.filter(api => {
-    if (api.name === 'Groq' && !process.env.GROQ_API_KEY) {
-      console.warn('[AI] ⚠️  Groq API key not configured');
-      return false;
-    }
-    if (api.name === 'Gemini' && !process.env.GEMINI_API_KEY) {
-      console.warn('[AI] ⚠️  Gemini API key not configured');
-      return false;
-    }
-    if (api.name === 'OpenAI' && !process.env.OPENAI_API_KEY) {
-      console.warn('[AI] ⚠️  OpenAI API key not configured');
-      return false;
-    }
-    return true;
-  });
-  
-  console.log(`[AI] Available APIs: ${finalApiCalls.map(a => a.name).join(' -> ')}`);
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`[AI] 🚀 Analyzing ${language} code (${cleanedCode.length} chars)`);
+  console.log(`[AI] Available APIs: ${apiCalls.map(a => a.name).join(' → ')}`);
+  console.log(`${'='.repeat(60)}\n`);
 
   let rawContent = '';
-  const errors = [];
+  const errors   = [];
 
-  try {
-    // Sequential API fallback strategy - only call next API if previous fails
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`[AI] 🚀 Starting analysis for ${language} code`);
-    console.log(`[AI] Code size: ${cleanedCode.length} chars`);
-    console.log(`[AI] Available APIs: ${finalApiCalls.map(a => a.name).join(' → ')}`);
-    console.log(`${'='.repeat(60)}\n`);
-    
-    // Try APIs sequentially - only move to next if current fails
-    for (const api of finalApiCalls) {
-      if (rawContent) {
-        console.log(`[AI] ✅ Already got valid response from earlier API, skipping ${api.name}`);
-        break;
-      }
-
-      try {
-        console.log(`\n[API] 🔄 Attempting ${api.name}...`);
-        const result = await callWithRetry(api.call, api.name, 2);
-        
-        // Check for valid response
-        if (result && result.trim && result.trim().length > 0) {
-          rawContent = result;
-          console.log(`[API] ✅✅✅ SUCCESS: ${api.name} returned valid response`);
-          console.log(`[AI] 📝 Response length: ${rawContent.length} chars\n`);
-          break; // Don't try other APIs
-        } else {
-          console.log(`[API] ⚠️  ${api.name} returned empty response, trying next API...`);
-          errors.push(`${api.name}: returned empty response`);
-        }
-      } catch (err) {
-        const errMsg = err.message || String(err);
-        console.error(`[API] ❌ ${api.name} failed:`, errMsg);
-        errors.push(`${api.name}: ${errMsg}`);
-        console.log(`[AI] Moving to next API...\n`);
-      }
-    }
-
-    if (!rawContent) {
-      console.error(`[AI] 💥💥💥 ALL APIS FAILED!`);
-      console.error(`[AI] Errors:`, errors);
-      
-      // FALLBACK: Return demo response for development/demo purposes
-      if (process.env.ENABLE_DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production') {
-        console.warn(`[AI] ⚠️  Using DEMO MODE - returning sample response`);
-        console.warn(`[AI] To disable: set ENABLE_DEMO_MODE=false in .env`);
-        rawContent = JSON.stringify({
-          issues: [
-            {
-              issue: 'Missing input validation',
-              explanation: 'The function does not check if the input is an array. Add array type check at the beginning.'
-            },
-            {
-              issue: 'No type checking for array elements',
-              explanation: 'Non-numeric values in the array are not validated. Add a check to verify all elements are numeric.'
-            }
-          ],
-          improvements: [
-            {suggestion: 'Use reduce() method for cleaner code', impact: 'Improves readability and performance'},
-            {suggestion: 'Add JSDoc documentation', impact: 'Better code maintainability'}
-          ],
-          optimized_code: 'function arraySum(arr){if(!Array.isArray(arr))throw new Error("Input must be array");if(!arr.every(Number.isFinite))throw new Error("All values must be numbers");return arr.reduce((acc,val)=>acc+val,0);}',
-          explanation: 'The original code uses a manual loop which is less efficient than reduce(). Added input validation to handle edge cases like non-array inputs or non-numeric values.',
-          complexity: {
-            time: 'O(n) - single pass through the array',
-            space: 'O(1) - no extra space used'
-          },
-          edge_cases: [
-            'Empty array - should return 0',
-            'Array with null/undefined - should throw error',
-            'Array with non-numeric values - should throw error',
-            'Non-array input - should throw error'
-          ],
-          test_cases: [
-            {input: '[1,2,3]', expected_output: '6', description: 'Basic array sum'},
-            {input: '[]', expected_output: '0', description: 'Empty array edge case'},
-            {input: '[1,"test",3]', expected_output: 'Error', description: 'Non-numeric value handling'},
-            {input: 'null', expected_output: 'Error', description: 'Non-array input'}
-          ],
-          score: {
-            overall: 72,
-            readability: 75,
-            efficiency: 70,
-            best_practices: 70
-          }
-        });
+  for (const api of apiCalls) {
+    if (rawContent) break;
+    try {
+      console.log(`\n[API] 🔄 Attempting ${api.name}...`);
+      const result = await callWithRetry(api.call, api.name, 2);
+      if (result && result.trim()) {
+        rawContent = result;
+        console.log(`[API] ✅✅✅ ${api.name} succeeded (${rawContent.length} chars)\n`);
       } else {
-        const err = new Error(
-          `All AI services failed. Common causes:\n` +
-          `• OpenAI: Check quota at https://platform.openai.com/account/billing/overview\n` +
-          `• Groq: Rate limit or invalid key at https://console.groq.com\n` +
-          `• Gemini: Quota exceeded at https://ai.google.dev/gemini-api/docs/rate-limits\n\n` +
-          `Details: ${errors.join(' | ')}`
-        );
-        err.statusCode = 503;
-        throw err;
+        errors.push(`${api.name}: empty response`);
       }
+    } catch (err) {
+      errors.push(`${api.name}: ${err.message}`);
+      console.error(`[API] ❌ ${api.name} failed:`, err.message);
     }
-
-    console.log(`[AI] ✅ Got response (${rawContent.length} chars)`);
-  } catch (err) {
-    console.error('[AI] Analysis error:', err.message);
-    if (!err.statusCode) {
-      err.statusCode = 500;
-    }
-    throw err;
   }
 
-  try {
-    // Robust JSON extraction
-    let cleaned = rawContent.trim();
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  if (!rawContent) {
+    console.error(`[AI] 💥 ALL APIS FAILED — Errors: ${errors.join(' | ')}`);
+
+    if (process.env.ENABLE_DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production') {
+      console.warn('[AI] ⚠️ Using DEMO MODE fallback');
+      rawContent = JSON.stringify({
+        quality_analysis: 'This code implements a basic iterative algorithm. The variable naming is functional but could be more descriptive — the loop index `i` and the generic `result` variable reduce readability at a glance. The function lacks input validation, which is a critical gap for production use. Overall structure is straightforward with a single responsibility, but the absence of error handling and type checks makes it fragile.',
+        issues: [
+          { description: 'Missing input validation — the function does not check if the input is an array before iterating.', severity: 'high', type: 'bug', suggestion: 'Add `if (!Array.isArray(arr)) throw new TypeError("Expected an array")` as the first statement.' },
+          { description: 'No type checking for array elements — non-numeric values are silently coerced by arithmetic operators.', severity: 'medium', type: 'bug', suggestion: 'Use `arr.every(Number.isFinite)` before processing to reject invalid elements early.' },
+        ],
+        improvements: [
+          { suggestion: 'Replace the manual loop with `Array.prototype.reduce()` for a more idiomatic and expressive summation pattern.', impact: 'Reduces cognitive load, eliminates the manual accumulator variable, and makes intent immediately clear.' },
+          { suggestion: 'Add JSDoc documentation with @param {number[]} and @returns {number} annotations.', impact: 'Enables IDE autocompletion, static type-checking tools, and improves maintainability for future developers.' },
+        ],
+        optimized_code: `/**
+ * Sums all numeric values in an array.
+ * @param {number[]} arr - Input array of numbers
+ * @returns {number} The sum of all elements
+ * @throws {TypeError} If input is not an array or contains non-finite values
+ */
+function arraySum(arr) {
+  if (!Array.isArray(arr)) throw new TypeError('Input must be an array');
+  if (!arr.every(Number.isFinite)) throw new TypeError('All elements must be finite numbers');
+  return arr.reduce((acc, val) => acc + val, 0);
+}`,
+        explanation: 'The function iterates through the input array using a for loop, adding each element to an accumulator variable initialized at 0. After exhausting all elements, it returns the accumulated total. The algorithm is a linear scan with O(n) time complexity. The main weakness is the lack of any guard clauses — passing null, a string, or an array with NaN values will silently produce incorrect results.',
+        complexity: { time: 'O(n) — single linear pass through all n elements', space: 'O(1) — only a single accumulator variable is allocated' },
+        edge_cases: [
+          'Empty array [] — the loop body never executes, returns the initial accumulator value of 0.',
+          'Array containing NaN or Infinity — JavaScript arithmetic with these produces NaN/Infinity silently, corrupting the result without any error.',
+          'Non-array input such as null or a string — no guard clause means the for loop will throw or iterate unexpectedly.',
+        ],
+        test_cases: [
+          { input: '[1, 2, 3, 4, 5]', expected_output: '15', description: 'Standard positive integers sum correctly', category: 'normal' },
+          { input: '[]', expected_output: '0', description: 'Empty array returns initial accumulator value 0', category: 'edge' },
+          { input: '[1, "test", 3]', expected_output: 'TypeError: All elements must be finite numbers', description: 'Non-numeric value in array triggers type guard in optimized version', category: 'corner' },
+          { input: '[-5, 5]', expected_output: '0', description: 'Positive and negative numbers cancel correctly', category: 'normal' },
+        ],
+        score: { overall: 62, readability: 65, efficiency: 70, best_practices: 52 },
+        converted_code: '',
+      });
     } else {
-      cleaned = cleaned
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/\s*```$/i, '')
-        .trim();
+      const err = new Error(`All AI services failed.\nDetails: ${errors.join(' | ')}`);
+      err.statusCode = 503;
+      throw err;
+    }
+  }
+
+  checkUniqueness(rawContent);
+  console.log(`[AI] ✅ Response received (${rawContent.length} chars) — parsing JSON...`);
+
+  // ─── Parse JSON ────────────────────────────────────────────────────────────
+  try {
+    let cleaned = rawContent.trim();
+
+    // Strip any markdown fences that slipped through
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    // Extract outermost JSON object
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace  = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.substring(firstBrace, lastBrace + 1);
     }
 
-    console.log(`[AI] 📋 Parsing JSON response (${cleaned.length} chars)...`);
-    
     const JSON5 = require('json5');
     let parsed;
-    
     try {
       parsed = JSON5.parse(cleaned);
-    } catch (parseErr) {
-      console.error('[AI] ❌ JSON5 parse failed, trying standard JSON...');
-      console.error('[AI] Parse error:', parseErr.message);
-      console.error('[AI] Raw content preview:', cleaned.substring(0, 200));
-      
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch (standardErr) {
-        console.error('[AI] ❌ Standard JSON parse also failed');
-        throw new Error(
-          `Failed to parse AI response as JSON. Response: ${cleaned.substring(0, 300)}`
-        );
-      }
+    } catch {
+      parsed = JSON.parse(cleaned);
     }
 
-    console.log(`[AI] ✅ JSON parsed successfully`);
-    console.log(`[AI] Response has: issues=${Array.isArray(parsed.issues) ? parsed.issues.length : 0}, test_cases=${Array.isArray(parsed.test_cases) ? parsed.test_cases.length : 0}, edge_cases=${Array.isArray(parsed.edge_cases) ? parsed.edge_cases.length : 0}`);
-    
+    console.log(`[AI] ✅ JSON parsed — issues=${Array.isArray(parsed.issues) ? parsed.issues.length : 0}, test_cases=${Array.isArray(parsed.test_cases) ? parsed.test_cases.length : 0}`);
     return sanitizeResponse(parsed, cleanedCode);
   } catch (err) {
-    if (err instanceof SyntaxError) {
-      console.error('AI JSON parse error. Raw output:', rawContent);
-      throw new Error('AI returned an unexpected format. Please try again.');
-    }
-    throw err;
+    console.error('[AI] ❌ JSON parse failed. Raw preview:', rawContent.substring(0, 300));
+    throw new Error('AI returned an unexpected format. Please try again.');
   }
 };
 
 // ─── Sanitizer ────────────────────────────────────────────────────────────────
 
 const sanitizeResponse = (raw, originalCode) => {
-  const clamp = (n) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
-  const str = (v) => String(v || '').slice(0, 5000);
+  const clamp    = (n) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
+  const str      = (v) => String(v || '').slice(0, 5000);
   const largeStr = (v) => String(v || '');
 
   let optimizedCode = largeStr(raw.optimized_code);
 
-  // 🔍 CRITICAL VALIDATION: Check if optimized code is identical to original
+  // ── Reject identical optimized code ────────────────────────────────────────
   if (optimizedCode && originalCode) {
     const normalize = (c) => c.replace(/\s+/g, ' ').trim();
-    const originalNorm = normalize(originalCode);
-    const optimizedNorm = normalize(optimizedCode);
-    
-    if (originalNorm === optimizedNorm) {
-      console.error('❌ WARNING: Optimized code IDENTICAL to original!');
-      console.error('This response will be rejected as invalid');
-      console.error('Original:', originalNorm.substring(0, 60));
-      console.error('Optimized:', optimizedNorm.substring(0, 60));
-      
-      // Mark as invalid by clearing optimized_code
+    if (normalize(originalCode) === normalize(optimizedCode)) {
+      console.error('❌ Optimized code is IDENTICAL to input — clearing field');
       optimizedCode = '';
     }
   }
 
-  // Validate required fields exist
-  if (!raw.issues || !Array.isArray(raw.issues)) {
-    console.warn('⚠️  Missing issues array');
-  }
-  if (!raw.optimized_code || raw.optimized_code.length === 0) {
-    console.warn('⚠️  Missing or empty optimized_code');
-  }
-  if (!raw.explanation || raw.explanation.length < 20) {
-    console.warn('⚠️  Missing or too-short explanation');
-  }
-  if (!raw.edge_cases || !Array.isArray(raw.edge_cases) || raw.edge_cases.length === 0) {
-    console.warn('⚠️  Missing edge_cases');
-  }
-  if (!raw.test_cases || !Array.isArray(raw.test_cases) || raw.test_cases.length === 0) {
-    console.warn('⚠️  Missing test_cases');
-  }
+  // ── Warn on missing sections ────────────────────────────────────────────────
+  if (!raw.quality_analysis) console.warn('⚠️ Missing quality_analysis');
+  if (!raw.issues?.length)   console.warn('⚠️ Missing issues array');
+  if (!raw.explanation || raw.explanation.length < 20) console.warn('⚠️ Short/missing explanation');
+  if (!raw.edge_cases?.length) console.warn('⚠️ Missing edge_cases');
+  if (!raw.test_cases?.length) console.warn('⚠️ Missing test_cases');
 
-  // Map AI response to MongoDB schema format
-  // Schema expects: issues: [{issue, explanation}], improvements: [{suggestion, impact}]
+  // ── Map issues — preserve severity/type/suggestion ─────────────────────────
+  const issues = Array.isArray(raw.issues)
+    ? raw.issues.filter(Boolean).slice(0, 15).map((issue) => {
+        if (typeof issue === 'string') {
+          return { issue: str(issue), explanation: '', severity: 'medium', type: 'bug', suggestion: '' };
+        }
+        return {
+          issue:       str(issue.description || issue.issue || issue.d || String(issue)),
+          explanation: str(issue.explanation || issue.fix || ''),
+          severity:    String(issue.severity || 'medium').toLowerCase(),
+          type:        String(issue.type || 'bug').toLowerCase(),
+          suggestion:  str(issue.suggestion || issue.fix || issue.explanation || ''),
+        };
+      })
+    : [];
+
+  // ── Map improvements ────────────────────────────────────────────────────────
+  const improvements = Array.isArray(raw.improvements)
+    ? raw.improvements.slice(0, 15).map((imp) => {
+        if (typeof imp === 'string') return { suggestion: str(imp), impact: '' };
+        return {
+          suggestion: str(imp.suggestion || imp.s || imp.suggested || String(imp)),
+          impact:     str(imp.impact || ''),
+        };
+      })
+    : [];
+
+  // ── Map test cases — preserve category ─────────────────────────────────────
+  const VALID_CATEGORIES = ['normal', 'edge', 'corner'];
+  const test_cases = Array.isArray(raw.test_cases)
+    ? raw.test_cases.slice(0, 10).map((tc, idx) => {
+        const rawCat  = String(tc.category || '').toLowerCase().trim();
+        const category = VALID_CATEGORIES.includes(rawCat)
+          ? rawCat
+          : idx === 0 ? 'normal' : idx <= 2 ? 'edge' : 'corner';
+        return {
+          input:           str(tc.input || tc.i || ''),
+          expected_output: str(tc.expected_output || tc.output || tc.o || ''),
+          description:     str(tc.description || tc.desc || ''),
+          category,
+        };
+      })
+    : [];
+
   return {
-    issues: Array.isArray(raw.issues)
-      ? raw.issues
-          .filter(i => i)
-          .slice(0, 15)
-          .map((issue) => {
-            // Handle both old format {d, fix} and new format {description, suggestion}
-            const issueText = issue.issue || issue.d || issue.description || String(issue);
-            const explanation = issue.explanation || issue.fix || issue.suggestion || '';
-            
-            return {
-              issue: str(issueText),
-              explanation: str(explanation),
-            };
-          })
-      : [],
-    improvements: Array.isArray(raw.improvements)
-      ? raw.improvements.slice(0, 15).map((imp) => ({
-          suggestion: str(imp.s || imp.suggested || imp.suggestion || imp),
-          impact: str(imp.impact || ''),
-        }))
-      : [],
+    quality_analysis: str(raw.quality_analysis || ''),
+    issues,
+    improvements,
     optimized_code: optimizedCode || '',
-    explanation: str(raw.explanation || ''),
-    edge_cases: Array.isArray(raw.edge_cases) 
+    explanation:    str(raw.explanation || ''),
+    edge_cases: Array.isArray(raw.edge_cases)
       ? raw.edge_cases.filter(e => e && String(e).length > 3).slice(0, 10)
       : [],
-    test_cases: Array.isArray(raw.test_cases)
-      ? raw.test_cases.slice(0, 10).map((t) => ({
-          input: str(t.input || t.i || ''),
-          expected_output: str(t.expected_output || t.output || t.o || ''),
-          description: str(t.description || t.desc || ''),
-        }))
-      : [],
+    test_cases,
     complexity: {
-      time: str(raw.complexity?.time || raw.time_complexity || ''),
+      time:  str(raw.complexity?.time  || raw.time_complexity  || ''),
       space: str(raw.complexity?.space || raw.space_complexity || ''),
     },
     score: {
-      overall: clamp(raw.score?.overall ?? raw.score?.o ?? 0),
-      readability: clamp(raw.score?.readability ?? raw.score?.r ?? 0),
-      efficiency: clamp(raw.score?.efficiency ?? raw.score?.e ?? 0),
-      best_practices: clamp(raw.score?.best_practices ?? raw.score?.b ?? 0),
+      overall:        clamp(raw.score?.overall        ?? 0),
+      readability:    clamp(raw.score?.readability     ?? 0),
+      efficiency:     clamp(raw.score?.efficiency      ?? 0),
+      best_practices: clamp(raw.score?.best_practices  ?? 0),
     },
     converted_code: largeStr(raw.converted_code || ''),
   };
