@@ -5,7 +5,17 @@
 
 const rateLimit = require('express-rate-limit');
 
-const ALLOWED_ORIGIN = (process.env.CLIENT_URL || 'http://localhost:3000').trim();
+const ALLOWED_ORIGINS = (process.env.CLIENT_URL || 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim());
+
+/**
+ * Robustly matches the request origin against the allowed list.
+ */
+function getAllowOrigin(req) {
+  const origin = req.headers.origin;
+  return origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+}
 
 /**
  * Extract the real client IP even when behind the Next.js proxy.
@@ -26,11 +36,7 @@ function getClientKey(req) {
  * are lost and the browser shows a CORS error instead of the rate-limit message.
  */
 function rateLimitHandler(req, res) {
-  const requestOrigin = req.headers.origin;
-  const allowOrigin =
-    requestOrigin && requestOrigin.trim() === ALLOWED_ORIGIN
-      ? requestOrigin
-      : ALLOWED_ORIGIN;
+  const allowOrigin = getAllowOrigin(req);
 
   res.setHeader('Access-Control-Allow-Origin',      allowOrigin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -64,11 +70,7 @@ const authRateLimiter = rateLimit({
   legacyHeaders:   false,
   keyGenerator: getClientKey,
   handler: (req, res) => {
-    const requestOrigin = req.headers.origin;
-    const allowOrigin =
-      requestOrigin && requestOrigin.trim() === ALLOWED_ORIGIN
-        ? requestOrigin
-        : ALLOWED_ORIGIN;
+    const allowOrigin = getAllowOrigin(req);
 
     res.setHeader('Access-Control-Allow-Origin',      allowOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -91,11 +93,7 @@ const aiRateLimiter = rateLimit({
   legacyHeaders:   false,
   keyGenerator: (req) => req.userId || req.ip,
   handler: (req, res) => {
-    const requestOrigin = req.headers.origin;
-    const allowOrigin =
-      requestOrigin && requestOrigin.trim() === ALLOWED_ORIGIN
-        ? requestOrigin
-        : ALLOWED_ORIGIN;
+    const allowOrigin = getAllowOrigin(req);
 
     res.setHeader('Access-Control-Allow-Origin',      allowOrigin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');

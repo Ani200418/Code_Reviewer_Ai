@@ -22,28 +22,26 @@ const app = express();
 // which means ALL users share one rate-limit bucket and exhaust it instantly.
 app.set('trust proxy', 1);
 
-/* ================= CORS — must be the very first middleware ================= */
-// Raw middleware instead of the cors npm package.
-// The cors package does a fragile exact-string match on the Origin header and
-// silently sets NO headers when the match fails — producing the misleading
-// "No Access-Control-Allow-Origin" error with no indication of why.
-// A raw middleware is explicit, predictable, and always correct.
-
-const ALLOWED_ORIGIN = (process.env.CLIENT_URL || 'http://localhost:3000').trim();
+/* ================= CORS — robust origin handling ================= */
+// Supports comma-separated list in process.env.CLIENT_URL
+const ALLOWED_ORIGINS = (process.env.CLIENT_URL || 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim());
 
 app.use((req, res, next) => {
   const requestOrigin = req.headers.origin;
 
-  // Echo back the request origin if it matches; otherwise use the configured URL.
-  const allowOrigin =
-    requestOrigin && requestOrigin.trim() === ALLOWED_ORIGIN
-      ? requestOrigin
-      : ALLOWED_ORIGIN;
+  // Echo back the request origin if it matches the allowed list;
+  // otherwise default to the first allowed origin.
+  const allowOrigin = requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
+    ? requestOrigin
+    : ALLOWED_ORIGINS[0];
 
   res.setHeader('Access-Control-Allow-Origin',      allowOrigin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods',     'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers',     'Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age',           '86400');
   res.setHeader('Access-Control-Max-Age',           '86400');
 
   // Respond immediately to every OPTIONS preflight.

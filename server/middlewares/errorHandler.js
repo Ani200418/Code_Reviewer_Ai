@@ -3,7 +3,9 @@
  * Centralized error handling for Express
  */
 
-const ALLOWED_ORIGIN = (process.env.CLIENT_URL || 'http://localhost:3000').trim();
+const ALLOWED_ORIGINS = (process.env.CLIENT_URL || 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim());
 
 /**
  * Ensure CORS headers are present on every response, including errors.
@@ -14,9 +16,9 @@ const ALLOWED_ORIGIN = (process.env.CLIENT_URL || 'http://localhost:3000').trim(
 function ensureCorsHeaders(req, res) {
   const requestOrigin = req.headers.origin;
   const allowOrigin =
-    requestOrigin && requestOrigin.trim() === ALLOWED_ORIGIN
+    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin.trim())
       ? requestOrigin
-      : ALLOWED_ORIGIN;
+      : ALLOWED_ORIGINS[0];
 
   if (!res.getHeader('Access-Control-Allow-Origin')) {
     res.setHeader('Access-Control-Allow-Origin',      allowOrigin);
