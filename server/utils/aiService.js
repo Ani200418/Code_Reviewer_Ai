@@ -348,12 +348,13 @@ const analyzeCode = async (code, language, targetLanguage = null) => {
     return null;
   };
 
-  // API priority order: OpenAI first (best quality), Gemini second, Groq third
-  // All are filtered by whether the key exists
+  // API priority order: Groq first (reliable free tier), OpenAI second (best quality),
+  // Gemini third (fallback). Groq is first because OpenAI/Gemini free quotas
+  // are frequently exhausted, while Groq's llama-3.3-70b has generous free limits.
   const apiCalls = [
+    { name: 'Groq',   key: 'GROQ_API_KEY',   call: () => callGroq(cleanedCode, language, targetLanguage)   },
     { name: 'OpenAI', key: 'OPENAI_API_KEY', call: () => callOpenAI(cleanedCode, language, targetLanguage) },
     { name: 'Gemini', key: 'GEMINI_API_KEY', call: () => callGemini(cleanedCode, language, targetLanguage) },
-    { name: 'Groq',   key: 'GROQ_API_KEY',   call: () => callGroq(cleanedCode, language, targetLanguage)   },
   ].filter(api => !!process.env[api.key]);
 
   console.log(`\n${'='.repeat(60)}`);
