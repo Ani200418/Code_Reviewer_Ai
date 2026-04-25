@@ -4,6 +4,7 @@
  */
 require('dotenv').config();
 const express  = require('express');
+const cors     = require('cors');
 const helmet   = require('helmet');
 const morgan   = require('morgan');
 const mongoose = require('mongoose');
@@ -11,59 +12,43 @@ const path     = require('path');
 
 const authRoutes   = require('./routes/authRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
-const analyzeRoutes = require('./routes/analyzeRoutes');
 const { errorHandler, notFound } = require('./middlewares/errorHandler');
 const { globalRateLimiter }      = require('./middlewares/rateLimiter');
 
 const app = express();
 
-// Trust the first proxy hop (Next.js dev server / nginx in production).
-// Without this, req.ip is always 127.0.0.1 for every user when behind a proxy,
-// which means ALL users share one rate-limit bucket and exhaust it instantly.
-app.set('trust proxy', 1);
+/* ================= SECURITY (FIXED CORS) ================= */
 
-/* ================= CORS — robust origin handling ================= */
-// Supports comma-separated list in process.env.CLIENT_URL
-const ALLOWED_ORIGINS = (process.env.CLIENT_URL || 'http://localhost:3000')
-  .split(',')
-  .map(o => o.trim());
+const corsOptions = {
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+};
 
+// 🔥 MUST BE FIRST
+app.use(cors(corsOptions));
+
+// 🔥 IMPORTANT: handle preflight explicitly
+app.options('*', cors(corsOptions));
+
+// 🔥 HARD FIX for stubborn CORS + Google OAuth
 app.use((req, res, next) => {
-  const requestOrigin = req.headers.origin;
+  res.header('Access-Control-Allow-Origin', process.env.CLIENT_URL || 'http://localhost:3000');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
 
-  // Echo back the request origin if it matches the allowed list;
-  // otherwise default to the first allowed origin.
-  const allowOrigin = requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
-    ? requestOrigin
-    : ALLOWED_ORIGINS[0];
-
-  res.setHeader('Access-Control-Allow-Origin',      allowOrigin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods',     'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers',     'Content-Type, Authorization');
-  res.setHeader('Access-Control-Max-Age',           '86400');
-  res.setHeader('Access-Control-Max-Age',           '86400');
-
-  // Respond immediately to every OPTIONS preflight.
-  // Nothing downstream (rate limiter, auth, routes) should ever see OPTIONS.
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.sendStatus(204);
   }
 
   next();
 });
 
 /* ================= SECURITY HEADERS ================= */
-// crossOriginOpenerPolicy:   false — Helmet default "same-origin" blocks
-//   window.postMessage from Google OAuth popup → Google Sign-In breaks.
-// crossOriginEmbedderPolicy: false — default "require-corp" blocks
-//   cross-origin resources that Google Sign-In depends on.
-// contentSecurityPolicy:     false — default CSP blocks accounts.google.com.
 app.use(helmet({
-  crossOriginResourcePolicy:  false,
-  crossOriginOpenerPolicy:    false,
-  crossOriginEmbedderPolicy:  false,
-  contentSecurityPolicy:      false,
+  crossOriginResourcePolicy: false,
 }));
 
 /* ================= PARSING ================= */
@@ -78,51 +63,33 @@ else app.use(morgan('combined'));
 app.use(globalRateLimiter);
 
 /* ================= DEBUG ================= */
-// Remove logging in production
-if (process.env.NODE_ENV === 'development') {
-  app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
-    next();
-  });
-}
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
 
 /* ================= STATIC ================= */
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /* ================= HEALTH ================= */
-app.get('/health', (req, res) =>
-  res.json({
-    status:  'ok',
-    service: 'AI Code Reviewer API',
-    ts:      new Date().toISOString(),
-  })
-);
-
-/* ================= ROOT ================= */
-app.get('/', (req, res) =>
-  res.json({
-    message: 'AI Code Reviewer API',
-    version: '2.0',
-    endpoints: {
-      health: '/health',
-      auth: '/api/auth/login',
-      review: '/api/review-code',
-      analyze: '/api/analyze',
-    },
+app.get('/health', (req, res) => 
+  res.json({ 
+    status:'ok', 
+    service:'AI Code Reviewer API', 
+    ts: new Date().toISOString() 
   })
 );
 
 /* ================= ROUTES ================= */
 app.use('/api/auth', authRoutes);
-app.use('/api', analyzeRoutes);
-app.use('/api', reviewRoutes);
+app.use('/api',      reviewRoutes);
 
 /* ================= ERROR HANDLING ================= */
 app.use(notFound);
 app.use(errorHandler);
 
 /* ================= START SERVER ================= */
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => {
@@ -134,14 +101,14 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
       console.log(`   Health: http://localhost:${PORT}/health\n`);
     });
   })
-  .catch(err => {
-    console.error('❌ MongoDB error:', err.message);
-    process.exit(1);
+  .catch(err => { 
+    console.error('❌ MongoDB error:', err.message); 
+    process.exit(1); 
   });
 
-process.on('SIGTERM', async () => {
-  await mongoose.connection.close();
-  process.exit(0);
+process.on('SIGTERM', async () => { 
+  await mongoose.connection.close(); 
+  process.exit(0); 
 });
 
 module.exports = app;

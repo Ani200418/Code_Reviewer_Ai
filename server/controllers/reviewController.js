@@ -1,204 +1,54 @@
 /**
- * Review Controller
- * Handles code review submissions, history, stats, and file uploads
+ * Review Controller — upgraded with public sharing support
+ * Built with ❤️ by Aniket Singh
  */
 
-const path      = require('path');
-const Review    = require('../models/Review');
+const fs      = require('fs');
+const path    = require('path');
+const Review  = require('../models/Review');
 const { analyzeCode } = require('../utils/aiService');
-const { generateCodeName } = require('../utils/codeNaming');
-const { validateUTF8 } = require('../utils/codeExecutor');
 const { reviewCodeSchema } = require('../utils/validators');
 
-const SUPPORTED_LANGUAGES = ['javascript', 'typescript', 'python', 'java', 'cpp', 'go', 'rust', 'other'];
-
-// ─── Detect language from file extension ─────────────────────────────────────
-
-const EXT_TO_LANG = {
-  '.js':  'javascript',
-  '.jsx': 'javascript',
-  '.ts':  'typescript',
-  '.tsx': 'typescript',
-  '.py':  'python',
-  '.java': 'java',
-  '.cpp': 'cpp',
-  '.cc':  'cpp',
-  '.cxx': 'cpp',
-  '.c':   'cpp',
-  '.go':  'go',
-  '.rs':  'rust',
-};
-
-const detectLanguage = (fileName) => {
-  if (!fileName) return 'other';
-  const ext = path.extname(fileName).toLowerCase();
-  return EXT_TO_LANG[ext] || 'other';
-};
-
-// ─── POST /api/review-code ────────────────────────────────────────────────────
-
+/* ── POST /api/review-code ──────────────────────────────────────── */
 const reviewCode = async (req, res, next) => {
+  const startTime = Date.now();
   try {
     const { error, value } = reviewCodeSchema.validate(req.body, { abortEarly: false });
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: error.details.map((d) => d.message),
-      });
-    }
+    if (error) return res.status(400).json({ success: false, message: 'Validation failed', errors: error.details.map(d => d.message) });
 
-    const { code, language, fileName, targetLanguage } = value;
-    const start = Date.now();
+    const { code, language, fileName } = value;
+    const aiResponse = await analyzeCode(code, language);
+    const processingTime = Date.now() - startTime;
 
-    // Generate meaningful title for the code
-    const title = generateCodeName(code, fileName);
-
-    // Get AI analysis
-    const aiResponse = await analyzeCode(code, language, targetLanguage);
-    
-    const processingTime = Date.now() - start;
-
-    // Save review with AI analysis only
     const review = await Review.create({
-      userId:       req.userId,
-      code,
-      language,
-      fileName:     fileName || null,
-      title,
-      aiResponse,
-      score:        aiResponse.score.overall,
-      processingTime,
+      userId: req.userId, code, language,
+      fileName: fileName || null, aiResponse,
+      score: aiResponse.score?.overall || 0, processingTime,
     });
 
-    // Return AI analysis
     res.status(201).json({
       success: true,
+      message: 'Code analysis complete',
       data: {
-        reviewId:           review._id,
-        language:           review.language,
-        fileName:           review.fileName,
-        title:              review.title,
-        aiResponse:         review.aiResponse,
-        score:              review.score,
-        processingTime:     review.processingTime,
-        createdAt:          review.createdAt,
+        reviewId: review._id, language: review.language,
+        fileName: review.fileName, aiResponse, score: review.score,
+        processingTime, createdAt: review.createdAt,
       },
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
-// ─── POST /api/upload-code ────────────────────────────────────────────────────
-
-const uploadCode = async (req, res, next) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
-    }
-
-    const fileName = req.file.originalname;
-    const language = detectLanguage(fileName);
-
-    // Step 1: Validate UTF-8 encoding
-    const utf8Validation = validateUTF8(req.file.buffer);
-    if (!utf8Validation.valid) {
-      return res.status(400).json({
-        success: false,
-        message: 'File Encoding Error',
-        data: {
-          compilationStatus: 'Error',
-          compilationError: utf8Validation.error,
-          errorType: 'encoding',
-          language,
-          fileName,
-          code: '',
-          suggestion: 'Please ensure the file is encoded in UTF-8 format.',
-        },
-      });
-    }
-
-    const code = utf8Validation.content;
-
-    // Step 2: Validate file is not empty
-    if (!code.trim()) {
-      return res.status(400).json({ success: false, message: 'Uploaded file is empty' });
-    }
-
-    // Step 3: Check file size (50KB limit for analysis)
-    if (code.length > 50000) {
-      return res.status(400).json({
-        success: false,
-        message: 'File too large',
-        data: {
-          compilationStatus: 'Error',
-          compilationError: `File exceeds 50,000 characters (${code.length} chars)`,
-          errorType: 'size',
-          language,
-          fileName,
-          code: '',
-          suggestion: 'Please upload a smaller file or split into multiple files.',
-        },
-      });
-    }
-
-    const start = Date.now();
-
-    // Generate meaningful title for the code
-    const title = generateCodeName(code, fileName);
-
-    // Get AI analysis
-    const targetLanguage = req.body.targetLanguage || null;
-    const aiResponse = await analyzeCode(code, language, targetLanguage);
-
-    const processingTime = Date.now() - start;
-
-    // Save review with AI analysis only
-    const review = await Review.create({
-      userId:            req.userId,
-      code,
-      language,
-      fileName,
-      title,
-      aiResponse,
-      score:             aiResponse.score.overall,
-      processingTime,
-    });
-
-    // Return AI analysis
-    res.status(201).json({
-      success: true,
-      data: {
-        reviewId:           review._id,
-        language:           review.language,
-        fileName:           review.fileName,
-        title:              review.title,
-        aiResponse:         review.aiResponse,
-        score:              review.score,
-        processingTime:     review.processingTime,
-        createdAt:          review.createdAt,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ─── GET /api/reviews ─────────────────────────────────────────────────────────
-
+/* ── GET /api/reviews ───────────────────────────────────────────── */
 const getReviews = async (req, res, next) => {
   try {
-    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const page  = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
     const skip  = (page - 1) * limit;
 
     const [reviews, total] = await Promise.all([
       Review.find({ userId: req.userId })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .select('-code -__v'),
+        .sort({ createdAt: -1 }).skip(skip).limit(limit)
+        .select('language fileName score createdAt processingTime aiResponse.score').lean(),
       Review.countDocuments({ userId: req.userId }),
     ]);
 
@@ -206,128 +56,101 @@ const getReviews = async (req, res, next) => {
       success: true,
       data: {
         reviews,
-        pagination: {
-          current:      page,
-          total:        Math.ceil(total / limit),
-          totalReviews: total,
-          hasMore:      page * limit < total,
-        },
+        pagination: { current: page, total: Math.ceil(total/limit), totalReviews: total, hasMore: skip+reviews.length < total },
       },
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
-// ─── GET /api/reviews/stats ───────────────────────────────────────────────────
-
+/* ── GET /api/reviews/stats ─────────────────────────────────────── */
 const getStats = async (req, res, next) => {
   try {
     const mongoose = require('mongoose');
-    const userObjectId = new mongoose.Types.ObjectId(req.userId);
-
-    const [stats, recentReviews] = await Promise.all([
-      Review.aggregate([
-        { $match: { userId: userObjectId } },
-        {
-          $group: {
-            _id:            null,
-            totalReviews:   { $sum: 1 },
-            averageScore:   { $avg: '$score' },
-            languageCounts: { $push: '$language' },
-          },
-        },
-      ]),
-      Review.find({ userId: req.userId })
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select('-code -__v'),
+    const stats = await Review.aggregate([
+      { $match: { userId: mongoose.Types.ObjectId.createFromHexString(req.userId) } },
+      { $group: { _id: null, totalReviews: { $sum: 1 }, averageScore: { $avg: '$score' }, languages: { $push: '$language' } } },
     ]);
 
-    const aggregated      = stats[0] || {};
-    const totalReviews    = aggregated.totalReviews || 0;
-    const averageScore    = aggregated.averageScore  ? Math.round(aggregated.averageScore) : 0;
-    const languageArr     = aggregated.languageCounts || [];
+    if (!stats.length) {
+      return res.status(200).json({ success: true, data: { totalReviews: 0, averageScore: 0, mostUsedLanguage: null, languageCounts: {}, recentReviews: [] } });
+    }
 
-    // Count occurrences of each language
-    const languageCounts = languageArr.reduce((acc, lang) => {
-      acc[lang] = (acc[lang] || 0) + 1;
-      return acc;
-    }, {});
-
-    const mostUsedLanguage = Object.keys(languageCounts).length
-      ? Object.entries(languageCounts).sort((a, b) => b[1] - a[1])[0][0]
-      : null;
+    const languageCounts = stats[0].languages.reduce((acc, lang) => { acc[lang] = (acc[lang]||0)+1; return acc; }, {});
+    const mostUsedLanguage = Object.entries(languageCounts).sort(([,a],[,b]) => b-a)[0]?.[0];
+    const recentReviews = await Review.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(5).select('language fileName score createdAt').lean();
 
     res.status(200).json({
       success: true,
       data: {
-        totalReviews,
-        averageScore,
-        mostUsedLanguage,
-        languageCounts,
-        recentReviews,
+        totalReviews: stats[0].totalReviews,
+        averageScore: Math.round(stats[0].averageScore * 10) / 10,
+        mostUsedLanguage, languageCounts, recentReviews,
       },
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
-// ─── GET /api/reviews/:id ─────────────────────────────────────────────────────
-
+/* ── GET /api/reviews/:id ───────────────────────────────────────── */
 const getReviewById = async (req, res, next) => {
   try {
-    const review = await Review.findOne({ _id: req.params.id, userId: req.userId });
-
-    if (!review) {
-      return res.status(404).json({ success: false, message: 'Review not found' });
-    }
-
+    const review = await Review.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
     res.status(200).json({ success: true, data: review });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
-// ─── GET /api/review/:id/public ──────────────────────────────────────────────
-
+/* ── GET /api/review/:id/public  (no auth) ──────────────────────── */
 const getPublicReview = async (req, res, next) => {
   try {
-    const review = await Review.findById(req.params.id).select('-userId');
-
-    if (!review) {
-      return res.status(404).json({ success: false, message: 'Review not found' });
-    }
-
+    const review = await Review.findById(req.params.id)
+      .select('code language fileName aiResponse score createdAt')
+      .lean();
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found or deleted.' });
     res.status(200).json({ success: true, data: review });
+  } catch (err) { next(err); }
+};
+
+/* ── POST /api/upload-code ──────────────────────────────────────── */
+const uploadCode = async (req, res, next) => {
+  const startTime = Date.now();
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    const { originalname, path: filePath, size } = req.file;
+    if (size > 500*1024) { fs.unlinkSync(filePath); return res.status(413).json({ success: false, message: 'File too large. Max 500KB.' }); }
+
+    const code = fs.readFileSync(filePath, 'utf-8');
+    fs.unlinkSync(filePath);
+    if (!code.trim()) return res.status(400).json({ success: false, message: 'Uploaded file is empty' });
+
+    const ext = path.extname(originalname).toLowerCase().replace('.', '');
+    const langMap = { js:'javascript', ts:'typescript', py:'python', java:'java', cpp:'cpp', cc:'cpp', go:'go', rs:'rust', cs:'csharp' };
+    const language = langMap[ext] || 'other';
+
+    const aiResponse = await analyzeCode(code, language);
+    const processingTime = Date.now() - startTime;
+
+    const review = await Review.create({
+      userId: req.userId, code, language, fileName: originalname,
+      aiResponse, score: aiResponse.score?.overall || 0, processingTime,
+    });
+
+    res.status(201).json({
+      success: true, message: 'File analyzed successfully',
+      data: { reviewId: review._id, fileName: originalname, language, aiResponse, score: review.score, processingTime, createdAt: review.createdAt },
+    });
   } catch (err) {
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     next(err);
   }
 };
 
-// ─── DELETE /api/reviews/:id ──────────────────────────────────────────────────
-
+/* ── DELETE /api/reviews/:id ────────────────────────────────────── */
 const deleteReview = async (req, res, next) => {
   try {
     const review = await Review.findOneAndDelete({ _id: req.params.id, userId: req.userId });
-
-    if (!review) {
-      return res.status(404).json({ success: false, message: 'Review not found' });
-    }
-
-    res.status(200).json({ success: true, message: 'Review deleted successfully' });
-  } catch (err) {
-    next(err);
-  }
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+    res.status(200).json({ success: true, message: 'Review deleted' });
+  } catch (err) { next(err); }
 };
 
-module.exports = {
-  reviewCode,
-  uploadCode,
-  getReviews,
-  getStats,
-  getReviewById,
-  getPublicReview,
-  deleteReview,
-};
+module.exports = { reviewCode, getReviews, getReviewById, getStats, uploadCode, deleteReview, getPublicReview };

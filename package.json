@@ -10,7 +10,9 @@
   "install:all": "cd server && npm install && cd ../client && npm install",
   "build:client": "cd client && npm run build",
   "start:server": "cd server && npm start",
-  "start:client": "cd client && npm start"
+  "start:client": "cd client && npm start",
+  "test:apis": "cd server && npm run test:apis",
+  "validate": "node validate.js"
 },
   "engines": {
     "node": ">=18.0.0"
