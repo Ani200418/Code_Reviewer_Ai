@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const persistAuth = (tkn: string, usr: User) => {
-    Cookies.set(TOKEN_KEY, tkn, { expires: 7, sameSite: 'strict' });
+    Cookies.set(TOKEN_KEY, tkn, { expires: 7, sameSite: 'lax' });
     localStorage.setItem(USER_KEY, JSON.stringify(usr));
     api.defaults.headers.common['Authorization'] = `Bearer ${tkn}`;
     setToken(tkn);
