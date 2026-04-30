@@ -51,7 +51,14 @@ app.use((req, res, next) => {
 /* ================= SECURITY HEADERS ================= */
 app.use(helmet({
   crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false,
 }));
+
+// Explicitly set headers for Google OAuth to work
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  next();
+});
 
 /* ================= PARSING ================= */
 app.use(express.json({ limit: '10mb' }));

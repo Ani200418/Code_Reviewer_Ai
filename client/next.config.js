@@ -19,7 +19,7 @@ const nextConfig = {
   // which forwards them to Express on port 5000 server-side.
   // This eliminates CORS entirely — the browser never makes a cross-origin call.
   async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     return [
       {
         source: '/api/:path*',
