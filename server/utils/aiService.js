@@ -163,6 +163,48 @@ const analyzeWithGemini = async (code, language) => {
   }
 };
 
+// ─── Mistral Provider ────────────────────────────────────────────────────────
+
+const analyzeWithMistral = async (code, language) => {
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) throw new Error('Mistral: API key not configured');
+
+  try {
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.MISTRAL_MODEL || 'mistral-large',
+        max_tokens: 1500,
+        temperature: 0.3,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: buildPrompt(code, language) },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      if (response.status === 429) throw new Error('Mistral: rate limited');
+      if (response.status === 401) throw new Error('Mistral: invalid API key');
+      throw new Error(`Mistral: ${errData.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const rawContent = data.choices[0]?.message?.content?.trim() || '';
+    if (!rawContent) throw new Error('Mistral: empty response');
+
+    return parseAndSanitize(rawContent, 'Mistral');
+  } catch (err) {
+    console.error('❌ Mistral error:', err.message);
+    throw err;
+  }
+};
+
 // ─── Response Parser & Sanitizer ──────────────────────────────────────────────
 
 const parseAndSanitize = (rawContent, provider) => {
@@ -191,9 +233,10 @@ const analyzeCode = async (code, language) => {
   if (process.env.OPENAI_API_KEY) providers.push({ name: 'OpenAI', fn: analyzeWithOpenAI });
   if (process.env.GROQ_API_KEY) providers.push({ name: 'Groq', fn: analyzeWithGroq });
   if (process.env.GOOGLE_API_KEY) providers.push({ name: 'Gemini', fn: analyzeWithGemini });
+  if (process.env.MISTRAL_API_KEY) providers.push({ name: 'Mistral', fn: analyzeWithMistral });
 
   if (providers.length === 0) {
-    throw new Error('No AI services configured. Please set OPENAI_API_KEY, GROQ_API_KEY, or GOOGLE_API_KEY');
+    throw new Error('No AI services configured. Please set OPENAI_API_KEY, GROQ_API_KEY, GOOGLE_API_KEY, or MISTRAL_API_KEY');
   }
 
   console.log(`🔄 Trying ${providers.length} AI provider(s)...`);
