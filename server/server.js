@@ -26,7 +26,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type','Authorization'],
 };
 
-// 🔥 MUST BE FIRST
+// 🔥 MUST BE FIRST - Apply CORS before helmet
 app.use(cors(corsOptions));
 
 // 🔥 IMPORTANT: handle preflight explicitly
@@ -34,10 +34,12 @@ app.options('*', cors(corsOptions));
 
 // 🔥 HARD FIX for stubborn CORS + Google OAuth
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', process.env.CLIENT_URL || 'http://localhost:3000');
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+  res.header('Access-Control-Allow-Origin', clientUrl);
   res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.header('Access-Control-Max-Age', '3600');
 
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);

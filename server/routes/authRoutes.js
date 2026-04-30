@@ -12,6 +12,15 @@ const { signup, login, getMe, googleAuth } = require('../controllers/authControl
 const { protect }         = require('../middlewares/authMiddleware');
 const { authRateLimiter } = require('../middlewares/rateLimiter');
 
+// Ensure preflight requests are handled
+router.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', process.env.CLIENT_URL || 'http://localhost:3000');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(204);
+});
+
 router.use(authRateLimiter);
 
 router.post('/signup', signup);
