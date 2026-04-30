@@ -101,7 +101,7 @@ const analyzeWithGroq = async (code, language) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
+        model: process.env.GROQ_MODEL || 'llama-3.1-70b-versatile',
         max_tokens: 1500,
         temperature: 0.3,
         messages: [
@@ -177,7 +177,7 @@ const analyzeWithMistral = async (code, language) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: process.env.MISTRAL_MODEL || 'mistral-large',
+        model: process.env.MISTRAL_MODEL || 'mistral-small',
         max_tokens: 1500,
         temperature: 0.3,
         messages: [
@@ -230,13 +230,13 @@ const analyzeCode = async (code, language) => {
   const errors = {};
 
   // Determine which providers to try based on configuration
-  if (process.env.OPENAI_API_KEY) providers.push({ name: 'OpenAI', fn: analyzeWithOpenAI });
   if (process.env.GROQ_API_KEY) providers.push({ name: 'Groq', fn: analyzeWithGroq });
-  if (process.env.GOOGLE_API_KEY) providers.push({ name: 'Gemini', fn: analyzeWithGemini });
   if (process.env.MISTRAL_API_KEY) providers.push({ name: 'Mistral', fn: analyzeWithMistral });
+  // Note: Gemini temporarily disabled due to free tier quota exhaustion
+  // if (process.env.GOOGLE_API_KEY) providers.push({ name: 'Gemini', fn: analyzeWithGemini });
 
   if (providers.length === 0) {
-    throw new Error('No AI services configured. Please set OPENAI_API_KEY, GROQ_API_KEY, GOOGLE_API_KEY, or MISTRAL_API_KEY');
+    throw new Error('No AI services configured. Please set GROQ_API_KEY or MISTRAL_API_KEY');
   }
 
   console.log(`🔄 Trying ${providers.length} AI provider(s)...`);
