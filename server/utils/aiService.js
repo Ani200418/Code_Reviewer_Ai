@@ -232,11 +232,10 @@ const analyzeCode = async (code, language) => {
   // Determine which providers to try based on configuration
   if (process.env.GROQ_API_KEY) providers.push({ name: 'Groq', fn: analyzeWithGroq });
   if (process.env.MISTRAL_API_KEY) providers.push({ name: 'Mistral', fn: analyzeWithMistral });
-  // Note: Gemini temporarily disabled due to free tier quota exhaustion
-  // if (process.env.GOOGLE_API_KEY) providers.push({ name: 'Gemini', fn: analyzeWithGemini });
+  if (process.env.GOOGLE_API_KEY) providers.push({ name: 'Gemini', fn: analyzeWithGemini });
 
   if (providers.length === 0) {
-    throw new Error('No AI services configured. Please set GROQ_API_KEY or MISTRAL_API_KEY');
+    throw new Error('No AI services configured. Please set at least one of: GROQ_API_KEY, MISTRAL_API_KEY, or GOOGLE_API_KEY');
   }
 
   console.log(`🔄 Trying ${providers.length} AI provider(s)...`);

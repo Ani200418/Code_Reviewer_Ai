@@ -25,19 +25,22 @@ console.log('================================\n');
 const hasOpenAI = !!process.env.OPENAI_API_KEY;
 const hasGemini = !!process.env.GOOGLE_API_KEY;
 const hasGroq = !!process.env.GROQ_API_KEY;
+const hasMistral = !!process.env.MISTRAL_API_KEY;
 
 console.log('📊 Configured Services:');
-console.log(`  OpenAI: ${hasOpenAI ? '✅ KEY FOUND' : '❌ NOT SET'}`);
-console.log(`  Gemini: ${hasGemini ? '✅ KEY FOUND' : '❌ NOT SET'}`);
-console.log(`  Groq:   ${hasGroq ? '✅ KEY FOUND' : '❌ NOT SET'}`);
+console.log(`  OpenAI:  ${hasOpenAI ? '✅ KEY FOUND' : '❌ NOT SET'}`);
+console.log(`  Gemini:  ${hasGemini ? '✅ KEY FOUND' : '❌ NOT SET'}`);
+console.log(`  Groq:    ${hasGroq ? '✅ KEY FOUND' : '❌ NOT SET'}`);
+console.log(`  Mistral: ${hasMistral ? '✅ KEY FOUND' : '❌ NOT SET'}`);
 console.log('');
 
-if (!hasOpenAI && !hasGemini && !hasGroq) {
+if (!hasOpenAI && !hasGemini && !hasGroq && !hasMistral) {
   console.error('❌ ERROR: No API keys configured!');
   console.error('Please set at least one of:');
   console.error('  - OPENAI_API_KEY');
   console.error('  - GOOGLE_API_KEY');
   console.error('  - GROQ_API_KEY');
+  console.error('  - MISTRAL_API_KEY');
   process.exit(1);
 }
 
@@ -54,6 +57,11 @@ if (hasGemini) {
 // Test Groq
 if (hasGroq) {
   testGroq();
+}
+
+// Test Mistral
+if (hasMistral) {
+  testMistral();
 }
 
 // ─── OpenAI Test ──────────────────────────────────────────────────────────────
@@ -155,6 +163,48 @@ async function testGroq() {
     }
   } catch (err) {
     console.log(`  ❌ Groq: ${err.message}`);
+  }
+}
+
+// ─── Mistral Test ─────────────────────────────────────────────────────────────
+
+async function testMistral() {
+  console.log('🧪 Testing Mistral...');
+  try {
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.MISTRAL_MODEL || 'mistral-small',
+        max_tokens: 100,
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant. Respond with just "OK".' },
+          { role: 'user', content: 'Say OK' },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      if (response.status === 429) {
+        console.log('  ⚠️  Mistral: Rate limited (check daily token limit)');
+      } else {
+        console.log(`  ❌ Mistral: ${errData.message || response.statusText}`);
+      }
+    } else {
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content?.trim();
+      if (content) {
+        console.log('  ✅ Mistral: Working');
+      } else {
+        console.log('  ❌ Mistral: Empty response');
+      }
+    }
+  } catch (err) {
+    console.log(`  ❌ Mistral: ${err.message}`);
   }
 }
 
