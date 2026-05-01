@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { RiSparklingLine, RiUpload2Line, RiEdit2Line, RiShareLine, RiInformationLine } from 'react-icons/ri';
 import { reviewService, ReviewResult } from '@/lib/services';
 import { LANGUAGE_OPTIONS, LanguageValue, extractErrorMessage } from '@/lib/utils';
+import { useProtectedRoute } from '@/lib/hooks/useAuth';
 import CodeEditor from '@/components/CodeEditor';
 import ReviewCard from '@/components/ReviewCard';
 import FileUpload from '@/components/FileUpload';
@@ -73,6 +74,9 @@ func main() {
 
 
 export default function ReviewPage() {
+  // ✅ Add auth protection
+  const { isLoading: authLoading } = useProtectedRoute();
+  
   const [tab, setTab] = useState<Tab>('editor');
   const [language, setLanguage] = useState<LanguageValue>('javascript');
   const [targetLanguage, setTargetLanguage] = useState<LanguageValue | ''>('');
@@ -81,6 +85,20 @@ export default function ReviewPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ReviewResult | null>(null);
   const [showShare, setShowShare] = useState(false);
+
+  // ✅ Add keyboard shortcut handler (Cmd+Enter / Ctrl+Enter)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !isAnalyzing) {
+        e.preventDefault();
+        // Call analyze via button click
+        const analyzeBtn = document.querySelector('[data-analyze-btn]') as HTMLButtonElement;
+        if (analyzeBtn) analyzeBtn.click();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAnalyzing]);
 
   const handleLangChange = (lang: LanguageValue) => {
     setLanguage(lang);
@@ -118,6 +136,15 @@ export default function ReviewPage() {
       setIsAnalyzing(false);
     }
   }, [tab, code, language, uploadedFile, targetLanguage]);
+
+  // ✅ Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 rounded-full border-2 border-sky-500/20 border-t-sky-500 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -214,7 +241,11 @@ export default function ReviewPage() {
                 ))}
               </select>
             </div>
-            <button onClick={handleAnalyze} disabled={isAnalyzing} className="btn-gradient px-8 py-3">
+            <button 
+              onClick={handleAnalyze} 
+              disabled={isAnalyzing} 
+              data-analyze-btn
+              className="btn-gradient px-8 py-3">
               {isAnalyzing
                 ? <><div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" /> Analyzing…</>
                 : <><RiSparklingLine size={16} /> Analyze with AI</>
