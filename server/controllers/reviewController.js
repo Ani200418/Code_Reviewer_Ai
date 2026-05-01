@@ -6,7 +6,7 @@
 const fs      = require('fs');
 const path    = require('path');
 const Review  = require('../models/Review');
-const { analyzeCode } = require('../utils/aiService');
+const { analyzeCode, convertCode } = require('../utils/aiService');
 const { reviewCodeSchema } = require('../utils/validators');
 
 /* ── POST /api/review-code ──────────────────────────────────────── */
@@ -153,4 +153,28 @@ const deleteReview = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { reviewCode, getReviews, getReviewById, getStats, uploadCode, deleteReview, getPublicReview };
+/* ── POST /api/convert-code ────────────────────────────────────── */
+const convertCodeText = async (req, res, next) => {
+  const startTime = Date.now();
+  try {
+    const { code, language, targetLanguage } = req.body;
+    
+    if (!code || !code.trim()) return res.status(400).json({ success: false, message: 'Code is required' });
+    if (!language) return res.status(400).json({ success: false, message: 'Language is required' });
+    if (!targetLanguage) return res.status(400).json({ success: false, message: 'Target language is required' });
+
+    const convertedCode = await convertCode(code, language, targetLanguage);
+    const processingTime = Date.now() - startTime;
+
+    res.status(200).json({
+      success: true,
+      message: 'Code conversion complete',
+      data: {
+        convertedCode,
+        processingTime,
+      },
+    });
+  } catch (err) { next(err); }
+};
+
+module.exports = { reviewCode, getReviews, getReviewById, getStats, uploadCode, deleteReview, getPublicReview, convertCodeText };

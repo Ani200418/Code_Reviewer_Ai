@@ -155,18 +155,38 @@ export default function ReviewPage() {
     setIsConverting(true);
     setResult(null);
     try {
-      const res = tab === 'upload' && uploadedFile
-        ? await reviewService.uploadCodeFile(uploadedFile, targetLanguage)
-        : await reviewService.reviewCode(code, language, targetLanguage);
-      setResult(res);
+      const codeToConvert = tab === 'upload' && uploadedFile ? code : code;
+      const convertedCodeResponse = await reviewService.convertCode(codeToConvert, language, targetLanguage);
+      
+      // Create a custom result object for conversion (just showing converted code, no analysis)
+      const conversionResult: ReviewResult = {
+        reviewId: '',
+        language: targetLanguage as LanguageValue,
+        fileName: undefined,
+        title: undefined,
+        compilationStatus: 'Success',
+        aiResponse: {
+          quality_analysis: '',
+          issues: [],
+          improvements: [],
+          explanation: `Successfully converted code from ${language} to ${targetLanguage}`,
+          edge_cases: [],
+          test_cases: [],
+          optimized_code: convertedCodeResponse.convertedCode,
+          converted_code: convertedCodeResponse.convertedCode,
+          complexity: { time: '', space: '' },
+          score: { overall: 0, readability: 0, efficiency: 0, best_practices: 0 },
+        },
+        score: 0,
+        processingTime: convertedCodeResponse.processingTime,
+        createdAt: new Date().toISOString(),
+      };
+      
+      setResult(conversionResult);
       toast.success('Code conversion complete!');
       setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
     } catch (err: any) {
-      if (err.response?.status === 400 && err.response?.data?.data?.compilationError) {
-        setResult(err.response.data.data as any);
-      } else {
-        toast.error(extractErrorMessage(err));
-      }
+      toast.error(extractErrorMessage(err));
     } finally {
       setIsConverting(false);
     }
@@ -331,26 +351,49 @@ export default function ReviewPage() {
             </>
           ) : (
             <>
-              {/* Success status bar */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-400" />
-                  <span className="text-sm font-medium text-slate-300">Analysis Complete</span>
-                  <span className="badge-sky text-xs capitalize">{result.language}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setShowShare(true)} className="btn-secondary text-xs py-1.5 px-3">
-                    <RiShareLine size={13} /> Share
-                  </button>
-                </div>
-              </div>
-              {/* Render results */}
-              <ReviewCard 
-                result={result.aiResponse} 
-                processingTime={result.processingTime}
-                compilationStatus={(result as any).compilationStatus}
-                currentOutput={(result as any).currentOutput}
-              />
+              {/* Determine if this is a conversion result (empty explanation means pure conversion) */}
+              {result.aiResponse?.explanation?.includes('Successfully converted code') ? (
+                <>
+                  {/* Conversion-only status bar */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400" />
+                      <span className="text-sm font-medium text-slate-300">Code Conversion Complete</span>
+                      <span className="badge-sky text-xs capitalize">{result.language}</span>
+                    </div>
+                  </div>
+                  {/* Render conversion result (only converted code section) */}
+                  <ReviewCard 
+                    result={result.aiResponse} 
+                    processingTime={result.processingTime}
+                    compilationStatus={(result as any).compilationStatus}
+                    currentOutput={(result as any).currentOutput}
+                  />
+                </>
+              ) : (
+                <>
+                  {/* Success status bar for analysis */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400" />
+                      <span className="text-sm font-medium text-slate-300">Analysis Complete</span>
+                      <span className="badge-sky text-xs capitalize">{result.language}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowShare(true)} className="btn-secondary text-xs py-1.5 px-3">
+                        <RiShareLine size={13} /> Share
+                      </button>
+                    </div>
+                  </div>
+                  {/* Render results */}
+                  <ReviewCard 
+                    result={result.aiResponse} 
+                    processingTime={result.processingTime}
+                    compilationStatus={(result as any).compilationStatus}
+                    currentOutput={(result as any).currentOutput}
+                  />
+                </>
+              )}
             </>
           )}
         </div>

@@ -186,6 +186,9 @@ export default function ReviewCard({
     complexity,
   } = result as any;
 
+  // Detect if this is a conversion-only result (no score means it's conversion only)
+  const isConversion = !score || !score.overall;
+
   return (
     <div className={`space-y-4 ${animate ? 'animate-slide-up' : ''}`}>
 
@@ -245,49 +248,51 @@ export default function ReviewCard({
       </Section>
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      {/* Score Dashboard */}
+      {/* Score Dashboard - HIDDEN for conversion-only */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      <div className="card-glow p-6">
-        <div className="section-label">Quality Score</div>
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
-          {/* Main ring */}
-          <div className="flex items-center gap-6">
-            <ScoreCircle score={score.overall} size={120} />
-            <div className="space-y-4 flex-1 min-w-0 lg:hidden">
+      {!isConversion && (
+        <div className="card-glow p-6">
+          <div className="section-label">Quality Score</div>
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
+            {/* Main ring */}
+            <div className="flex items-center gap-6">
+              <ScoreCircle score={score.overall} size={120} />
+              <div className="space-y-4 flex-1 min-w-0 lg:hidden">
+                <ScoreBar label="Readability"    value={score.readability} />
+                <ScoreBar label="Efficiency"     value={score.efficiency} />
+                <ScoreBar label="Best Practices" value={score.best_practices} />
+              </div>
+            </div>
+
+            {/* Mini score circles */}
+            <div className="flex gap-4 flex-wrap">
+              {[
+                { label: 'Readability',    value: score.readability },
+                { label: 'Efficiency',     value: score.efficiency },
+                { label: 'Best Practices', value: score.best_practices },
+              ].map((s) => (
+                <div key={s.label} className="flex flex-col items-center" style={{ minWidth: 80 }}>
+                  <ScoreCircle score={s.value} size={80} strokeWidth={5} showLabel={false} />
+                  <p className="text-xs text-[var(--text-muted)] mt-1.5 text-center">{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Score bars (desktop) */}
+            <div className="hidden lg:flex flex-col gap-3 flex-1 pt-1">
               <ScoreBar label="Readability"    value={score.readability} />
               <ScoreBar label="Efficiency"     value={score.efficiency} />
               <ScoreBar label="Best Practices" value={score.best_practices} />
             </div>
           </div>
 
-          {/* Mini score circles */}
-          <div className="flex gap-4 flex-wrap">
-            {[
-              { label: 'Readability',    value: score.readability },
-              { label: 'Efficiency',     value: score.efficiency },
-              { label: 'Best Practices', value: score.best_practices },
-            ].map((s) => (
-              <div key={s.label} className="flex flex-col items-center" style={{ minWidth: 80 }}>
-                <ScoreCircle score={s.value} size={80} strokeWidth={5} showLabel={false} />
-                <p className="text-xs text-[var(--text-muted)] mt-1.5 text-center">{s.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Score bars (desktop) */}
-          <div className="hidden lg:flex flex-col gap-3 flex-1 pt-1">
-            <ScoreBar label="Readability"    value={score.readability} />
-            <ScoreBar label="Efficiency"     value={score.efficiency} />
-            <ScoreBar label="Best Practices" value={score.best_practices} />
-          </div>
+          {processingTime && (
+            <p className="mt-4 text-xs text-[var(--text-muted)] text-right">
+              Analyzed in {(processingTime / 1000).toFixed(1)}s
+            </p>
+          )}
         </div>
-
-        {processingTime && (
-          <p className="mt-4 text-xs text-[var(--text-muted)] text-right">
-            Analyzed in {(processingTime / 1000).toFixed(1)}s
-          </p>
-        )}
-      </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* 2. ⚡ OPTIMIZED CODE */}
@@ -339,16 +344,19 @@ export default function ReviewCard({
       </Section>
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      {/* 4. ❌ ISSUES FOUND */}
+      {/* Analysis Sections - HIDDEN for conversion-only */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      <Section
-        id="section-issues"
-        title="Issues Found"
-        icon={<RiBugLine size={16} />}
-        color="#f87171"
-        bg="rgba(239,68,68,0.12)"
-        count={issues?.length || 0}
-      >
+      {!isConversion && (
+        <>
+          {/* 4. ❌ ISSUES FOUND */}
+          <Section
+            id="section-issues"
+            title="Issues Found"
+            icon={<RiBugLine size={16} />}
+            color="#f87171"
+            bg="rgba(239,68,68,0.12)"
+            count={issues?.length || 0}
+          >
         {!issues || issues.length === 0 ? (
           <div className="flex items-center gap-2 py-2">
             <div className="w-7 h-7 rounded-full bg-green-500/15 flex items-center justify-center">
@@ -600,6 +608,8 @@ export default function ReviewCard({
             )}
           </div>
         </Section>
+      )}
+      </>
       )}
 
     </div>

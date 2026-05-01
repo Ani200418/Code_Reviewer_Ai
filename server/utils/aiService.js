@@ -304,4 +304,144 @@ const sanitizeResponse = (raw) => {
   };
 };
 
-module.exports = { analyzeCode };
+// ─── Code Conversion (only convert, no analysis) ────────────────────────────
+
+const CONVERSION_PROMPT = `You are an expert code translator. Convert the given code to ${'{targetLanguage}'} while preserving all functionality and logic.
+
+IMPORTANT:
+- Output ONLY the converted code, nothing else
+- No explanations, no comments, no markdown fences
+- Keep the same logic and functionality
+- Use proper syntax for the target language
+- If the code uses language-specific features, adapt them appropriately`;
+
+const convertWithGroq = async (code, language, targetLanguage) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('Groq: API key not configured');
+
+  try {
+    const prompt = CONVERSION_PROMPT.replace('{targetLanguage}', targetLanguage);
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: `Convert from ${language} to ${targetLanguage}:\n\n${code}` },
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+      }),
+    });
+
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error?.message || 'Groq API error');
+
+    const convertedCode = json.choices[0]?.message?.content?.trim() || '';
+    if (!convertedCode) throw new Error('Groq: empty conversion response');
+
+    return convertedCode;
+  } catch (err) {
+    console.error('❌ Groq conversion error:', err.message);
+    throw err;
+  }
+};
+
+const convertWithMistral = async (code, language, targetLanguage) => {
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) throw new Error('Mistral: API key not configured');
+
+  try {
+    const prompt = CONVERSION_PROMPT.replace('{targetLanguage}', targetLanguage);
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.MISTRAL_MODEL || 'mistral-small',
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: `Convert from ${language} to ${targetLanguage}:\n\n${code}` },
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+      }),
+    });
+
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error?.message || 'Mistral API error');
+
+    const convertedCode = json.choices[0]?.message?.content?.trim() || '';
+    if (!convertedCode) throw new Error('Mistral: empty conversion response');
+
+    return convertedCode;
+  } catch (err) {
+    console.error('❌ Mistral conversion error:', err.message);
+    throw err;
+  }
+};
+
+const convertWithGemini = async (code, language, targetLanguage) => {
+  const client = getGeminiClient();
+  if (!client) throw new Error('Gemini: API key not configured');
+
+  try {
+    const prompt = CONVERSION_PROMPT.replace('{targetLanguage}', targetLanguage);
+    const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const response = await model.generateContent({
+      contents: [
+        { role: 'user', parts: [{ text: prompt + `\n\nConvert from ${language} to ${targetLanguage}:\n\n${code}` }] },
+      ],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+    });
+
+    const convertedCode = response.response?.text()?.trim() || '';
+    if (!convertedCode) throw new Error('Gemini: empty conversion response');
+
+    return convertedCode;
+  } catch (err) {
+    console.error('❌ Gemini conversion error:', err.message);
+    throw err;
+  }
+};
+
+const convertCode = async (code, language, targetLanguage) => {
+  const providers = [];
+  const errors = {};
+
+  if (process.env.GROQ_API_KEY) providers.push({ name: 'Groq', fn: () => convertWithGroq(code, language, targetLanguage) });
+  if (process.env.MISTRAL_API_KEY) providers.push({ name: 'Mistral', fn: () => convertWithMistral(code, language, targetLanguage) });
+  if (process.env.GOOGLE_API_KEY) providers.push({ name: 'Gemini', fn: () => convertWithGemini(code, language, targetLanguage) });
+
+  if (providers.length === 0) {
+    throw new Error('No AI services configured. Please set at least one of: GROQ_API_KEY, MISTRAL_API_KEY, or GOOGLE_API_KEY');
+  }
+
+  console.log(`🔄 Trying ${providers.length} AI provider(s) for code conversion...`);
+
+  for (const provider of providers) {
+    try {
+      console.log(`  ✓ Attempting ${provider.name} for conversion...`);
+      const result = await provider.fn();
+      console.log(`  ✅ ${provider.name} conversion succeeded`);
+      return result;
+    } catch (err) {
+      errors[provider.name] = err.message;
+      console.log(`  ⚠️  ${provider.name} failed: ${err.message}`);
+    }
+  }
+
+  const errorDetails = Object.entries(errors)
+    .map(([name, msg]) => `${name}: ${msg}`)
+    .join(' | ');
+  
+  throw new Error(`All AI services failed for code conversion. Details: ${errorDetails}`);
+};
+
+module.exports = { analyzeCode, convertCode };

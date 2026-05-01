@@ -23,6 +23,7 @@ const {
   getReviewById,
   getPublicReview,
   deleteReview,
+  convertCodeText,
 } = require('../controllers/reviewController');
 
 // Multer: store file in memory (max 500 KB)
@@ -49,6 +50,7 @@ router.use(protect);
 
 router.post('/review-code',  aiRateLimiter, reviewCode);
 router.post('/upload-code',  aiRateLimiter, upload.single('file'), uploadCode);
+router.post('/convert-code', aiRateLimiter, convertCodeText);
 
 // Protected review endpoints
 router.get('/reviews/stats', getStats);

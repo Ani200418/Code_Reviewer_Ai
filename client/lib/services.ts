@@ -134,6 +134,14 @@ export const reviewService = {
   },
 
   /**
+   * Convert code to a different language (no analysis)
+   */
+  convertCode: async (code: string, language: string, targetLanguage: string): Promise<{ convertedCode: string; processingTime: number }> => {
+    const res = await api.post('/convert-code', { code, language, targetLanguage });
+    return res.data.data;
+  },
+
+  /**
    * Fetch paginated review history
    */
   getReviews: async (page = 1, limit = 10): Promise<PaginatedReviews> => {
