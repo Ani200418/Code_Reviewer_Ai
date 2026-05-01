@@ -51,7 +51,7 @@ export default function PublicReviewPage() {
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               <RiTerminalBoxLine className="text-purple-400" />
-              Shared Code Review
+              {review.title || 'Code Review'}
             </h1>
             <p className="text-slate-500 text-sm mt-1">
               Read-only public link · Analyzed on {new Date(review.createdAt).toLocaleDateString()}

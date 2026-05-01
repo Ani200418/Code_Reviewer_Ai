@@ -8,6 +8,7 @@ const path    = require('path');
 const Review  = require('../models/Review');
 const { analyzeCode, convertCode } = require('../utils/aiService');
 const { reviewCodeSchema } = require('../utils/validators');
+const { generateCodeName } = require('../utils/codeNaming');
 
 /* ── POST /api/review-code ──────────────────────────────────────── */
 const reviewCode = async (req, res, next) => {
@@ -19,10 +20,13 @@ const reviewCode = async (req, res, next) => {
     const { code, language, fileName } = value;
     const aiResponse = await analyzeCode(code, language);
     const processingTime = Date.now() - startTime;
+    
+    // Generate meaningful title from code
+    const title = generateCodeName(code, fileName);
 
     const review = await Review.create({
       userId: req.userId, code, language,
-      fileName: fileName || null, aiResponse,
+      fileName: fileName || null, title, aiResponse,
       score: aiResponse.score?.overall || 0, processingTime,
     });
 
@@ -31,7 +35,7 @@ const reviewCode = async (req, res, next) => {
       message: 'Code analysis complete',
       data: {
         reviewId: review._id, language: review.language,
-        fileName: review.fileName, aiResponse, score: review.score,
+        fileName: review.fileName, title: review.title, aiResponse, score: review.score,
         processingTime, createdAt: review.createdAt,
       },
     });
@@ -48,7 +52,7 @@ const getReviews = async (req, res, next) => {
     const [reviews, total] = await Promise.all([
       Review.find({ userId: req.userId })
         .sort({ createdAt: -1 }).skip(skip).limit(limit)
-        .select('language fileName score createdAt processingTime aiResponse.score').lean(),
+        .select('language fileName title score createdAt processingTime aiResponse.score').lean(),
       Review.countDocuments({ userId: req.userId }),
     ]);
 
@@ -103,7 +107,7 @@ const getReviewById = async (req, res, next) => {
 const getPublicReview = async (req, res, next) => {
   try {
     const review = await Review.findById(req.params.id)
-      .select('code language fileName aiResponse score createdAt')
+      .select('code language fileName title aiResponse score createdAt')
       .lean();
     if (!review) return res.status(404).json({ success: false, message: 'Review not found or deleted.' });
     res.status(200).json({ success: true, data: review });
@@ -128,15 +132,18 @@ const uploadCode = async (req, res, next) => {
 
     const aiResponse = await analyzeCode(code, language);
     const processingTime = Date.now() - startTime;
+    
+    // Generate meaningful title from code
+    const title = generateCodeName(code, originalname);
 
     const review = await Review.create({
-      userId: req.userId, code, language, fileName: originalname,
+      userId: req.userId, code, language, fileName: originalname, title,
       aiResponse, score: aiResponse.score?.overall || 0, processingTime,
     });
 
     res.status(201).json({
       success: true, message: 'File analyzed successfully',
-      data: { reviewId: review._id, fileName: originalname, language, aiResponse, score: review.score, processingTime, createdAt: review.createdAt },
+      data: { reviewId: review._id, fileName: originalname, language, title, aiResponse, score: review.score, processingTime, createdAt: review.createdAt },
     });
   } catch (err) {
     if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
