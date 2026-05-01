@@ -172,7 +172,7 @@ const deleteReview = async (req, res, next) => {
 const convertCodeText = async (req, res, next) => {
   const startTime = Date.now();
   try {
-    const { code, language, targetLanguage } = req.body;
+    const { code, language, targetLanguage, fileName } = req.body;
     
     if (!code || !code.trim()) return res.status(400).json({ success: false, message: 'Code is required' });
     if (!language) return res.status(400).json({ success: false, message: 'Language is required' });
@@ -180,13 +180,41 @@ const convertCodeText = async (req, res, next) => {
 
     const convertedCode = await convertCode(code, language, targetLanguage);
     const processingTime = Date.now() - startTime;
+    
+    // Generate meaningful title from original code
+    const title = generateCodeName(code, fileName);
+    
+    // Create a review record for the conversion (with converted code in aiResponse)
+    const conversionReview = await Review.create({
+      userId: req.userId,
+      code: convertedCode, // Store the converted code
+      language: targetLanguage, // Store target language as the language
+      fileName: fileName || null,
+      title: `${title} (${language}→${targetLanguage})`,
+      aiResponse: {
+        quality_analysis: '',
+        issues: [],
+        improvements: [],
+        optimized_code: convertedCode,
+        converted_code: convertedCode,
+        explanation: `Successfully converted code from ${language} to ${targetLanguage}`,
+        edge_cases: [],
+        test_cases: [],
+        complexity: { time: '', space: '' },
+        score: { overall: 0, readability: 0, efficiency: 0, best_practices: 0 },
+      },
+      score: 0, // Conversion doesn't have a quality score
+      processingTime,
+    });
 
-    res.status(200).json({
+    res.status(201).json({
       success: true,
       message: 'Code conversion complete',
       data: {
+        reviewId: conversionReview._id,
         convertedCode,
         processingTime,
+        title: conversionReview.title,
       },
     });
   } catch (err) { next(err); }

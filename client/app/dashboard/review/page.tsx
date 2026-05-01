@@ -160,10 +160,10 @@ export default function ReviewPage() {
       
       // Create a custom result object for conversion (just showing converted code, no analysis)
       const conversionResult: ReviewResult = {
-        reviewId: '',
+        reviewId: convertedCodeResponse.reviewId,
         language: targetLanguage as LanguageValue,
         fileName: undefined,
-        title: undefined,
+        title: convertedCodeResponse.title,
         compilationStatus: 'Success',
         aiResponse: {
           quality_analysis: '',

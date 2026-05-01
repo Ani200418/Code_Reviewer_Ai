@@ -136,7 +136,7 @@ export const reviewService = {
   /**
    * Convert code to a different language (no analysis)
    */
-  convertCode: async (code: string, language: string, targetLanguage: string): Promise<{ convertedCode: string; processingTime: number }> => {
+  convertCode: async (code: string, language: string, targetLanguage: string): Promise<{ reviewId: string; convertedCode: string; processingTime: number; title: string }> => {
     const res = await api.post('/convert-code', { code, language, targetLanguage });
     return res.data.data;
   },
