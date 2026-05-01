@@ -63,7 +63,7 @@ const errorHandler = (err, req, res, next) => {
     message = 'Unexpected file field in upload request.';
   }
 
-  // OpenAI API errors
+  // AI API errors
   if (err.status === 429 || message.includes('rate limit') || message.includes('rate limited')) {
     statusCode = 429;
     message = 'API service is currently busy. Please try again in a moment.';

@@ -1,26 +1,13 @@
 /**
  * AI Service Utility with Multi-Provider Support
- * Supports OpenAI, Groq, and Google Gemini with intelligent fallback
+ * Supports Groq, Mistral, and Google Gemini with intelligent fallback
  */
 
-const OpenAI = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-let openaiClient = null;
-let geminiClient = null;
 
 // ─── Client Initialization ────────────────────────────────────────────────────
 
-const getOpenAIClient = () => {
-  if (!openaiClient) {
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn('⚠️  OPENAI_API_KEY not set');
-      return null;
-    }
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return openaiClient;
-};
+let geminiClient = null;
 
 const getGeminiClient = () => {
   if (!geminiClient) {
@@ -57,35 +44,6 @@ Rules:
 
 const buildPrompt = (code, language) =>
   `Language: ${language.toUpperCase()}\n\nCode:\n\`\`\`${language}\n${code}\n\`\`\`\n\nAnalyze this specific code. Return ONLY the JSON, nothing else.`;
-
-// ─── OpenAI Provider ──────────────────────────────────────────────────────────
-
-const analyzeWithOpenAI = async (code, language) => {
-  const client = getOpenAIClient();
-  if (!client) throw new Error('OpenAI: API key not configured');
-
-  try {
-    const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      max_tokens: 1500,
-      temperature: 0.3,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildPrompt(code, language) },
-      ],
-    });
-
-    const rawContent = response.choices[0]?.message?.content?.trim() || '';
-    if (!rawContent) throw new Error('OpenAI: empty response');
-
-    return parseAndSanitize(rawContent, 'OpenAI');
-  } catch (err) {
-    console.error('❌ OpenAI error:', err.message);
-    if (err.status === 429) throw new Error('OpenAI: rate limited');
-    if (err.status === 401) throw new Error('OpenAI: invalid API key');
-    throw err;
-  }
-};
 
 // ─── Groq Provider ───────────────────────────────────────────────────────────
 

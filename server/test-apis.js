@@ -8,7 +8,6 @@
 
 require('dotenv').config();
 
-const OpenAI = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const testCode = `
@@ -22,31 +21,23 @@ console.log('🔍 AI Service Configuration Check');
 console.log('================================\n');
 
 // Check what services are configured
-const hasOpenAI = !!process.env.OPENAI_API_KEY;
 const hasGemini = !!process.env.GOOGLE_API_KEY;
 const hasGroq = !!process.env.GROQ_API_KEY;
 const hasMistral = !!process.env.MISTRAL_API_KEY;
 
 console.log('📊 Configured Services:');
-console.log(`  OpenAI:  ${hasOpenAI ? '✅ KEY FOUND' : '❌ NOT SET'}`);
 console.log(`  Gemini:  ${hasGemini ? '✅ KEY FOUND' : '❌ NOT SET'}`);
 console.log(`  Groq:    ${hasGroq ? '✅ KEY FOUND' : '❌ NOT SET'}`);
 console.log(`  Mistral: ${hasMistral ? '✅ KEY FOUND' : '❌ NOT SET'}`);
 console.log('');
 
-if (!hasOpenAI && !hasGemini && !hasGroq && !hasMistral) {
+if (!hasGemini && !hasGroq && !hasMistral) {
   console.error('❌ ERROR: No API keys configured!');
   console.error('Please set at least one of:');
-  console.error('  - OPENAI_API_KEY');
   console.error('  - GOOGLE_API_KEY');
   console.error('  - GROQ_API_KEY');
   console.error('  - MISTRAL_API_KEY');
   process.exit(1);
-}
-
-// Test OpenAI
-if (hasOpenAI) {
-  testOpenAI();
 }
 
 // Test Gemini
@@ -62,38 +53,6 @@ if (hasGroq) {
 // Test Mistral
 if (hasMistral) {
   testMistral();
-}
-
-// ─── OpenAI Test ──────────────────────────────────────────────────────────────
-
-async function testOpenAI() {
-  console.log('🧪 Testing OpenAI...');
-  try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      max_tokens: 100,
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant. Respond with just "OK".' },
-        { role: 'user', content: 'Say OK' },
-      ],
-    });
-
-    const content = response.choices[0]?.message?.content?.trim();
-    if (content) {
-      console.log('  ✅ OpenAI: Working');
-    } else {
-      console.log('  ❌ OpenAI: Empty response');
-    }
-  } catch (err) {
-    if (err.status === 429) {
-      console.log('  ⚠️  OpenAI: Rate limited (quota exceeded)');
-    } else if (err.status === 401) {
-      console.log('  ❌ OpenAI: Invalid API key');
-    } else {
-      console.log(`  ❌ OpenAI: ${err.message}`);
-    }
-  }
 }
 
 // ─── Gemini Test ───────────────────────────────────────────────────────────────

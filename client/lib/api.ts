@@ -7,7 +7,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
-  timeout: 60000, // 60s — generous for OpenAI calls
+  timeout: 60000, // 60s — generous for AI API calls
   withCredentials: true, // Include credentials (cookies) with all requests
   headers: {
     'Content-Type': 'application/json',

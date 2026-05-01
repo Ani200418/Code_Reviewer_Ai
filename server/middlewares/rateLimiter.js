@@ -84,7 +84,7 @@ const authRateLimiter = rateLimit({
 });
 
 /**
- * AI rate limiter — controls OpenAI API usage cost
+ * AI rate limiter — controls AI API usage cost
  */
 const aiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
