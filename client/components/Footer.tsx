@@ -17,7 +17,7 @@ export default function Footer({ variant = 'minimal' }: FooterProps) {
             <RiHeartFill size={13} className="text-red-500/70 animate-pulse" />
             <span>by</span>
             <a
-              href="https://github.com/aniketsingh"
+              href="https://github.com/Ani200418"
               target="_blank"
               rel="noopener noreferrer"
               className="text-slate-400 hover:text-sky-400 font-semibold transition-colors duration-200"
@@ -27,7 +27,7 @@ export default function Footer({ variant = 'minimal' }: FooterProps) {
           </div>
           <div className="flex items-center gap-4">
             <a
-              href="https://github.com/aniketsingh"
+              href="https://github.com/Ani200418"
               target="_blank"
               rel="noopener noreferrer"
               className="text-slate-600 hover:text-slate-400 transition-colors"
@@ -83,7 +83,7 @@ export default function Footer({ variant = 'minimal' }: FooterProps) {
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-slate-600 mb-3">Creator</p>
               <div className="space-y-2">
-                <a href="https://github.com/aniketsingh" target="_blank" rel="noopener noreferrer"
+                <a href="https://github.com/Ani200418" target="_blank" rel="noopener noreferrer"
                    className="flex items-center gap-1.5 text-slate-500 hover:text-slate-300 transition-colors">
                   <RiGithubFill size={14} /> GitHub
                 </a>
@@ -109,7 +109,7 @@ export default function Footer({ variant = 'minimal' }: FooterProps) {
             <RiHeartFill size={13} className="text-red-500/70" />
             <span>by</span>
             <a
-              href="https://github.com/aniketsingh"
+              href="https://github.com/Ani200418"
               target="_blank"
               rel="noopener noreferrer"
               className="font-semibold text-slate-400 hover:text-sky-400 transition-colors"
