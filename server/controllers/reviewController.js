@@ -106,12 +106,20 @@ const getReviewById = async (req, res, next) => {
 /* ── GET /api/review/:id/public  (no auth) ──────────────────────── */
 const getPublicReview = async (req, res, next) => {
   try {
-    const review = await Review.findById(req.params.id)
+    const { id } = req.params;
+    if (!id || id.length !== 24) {
+      return res.status(400).json({ success: false, message: 'Invalid review ID format' });
+    }
+    const review = await Review.findById(id)
       .select('code language fileName title aiResponse score createdAt')
       .lean();
-    if (!review) return res.status(404).json({ success: false, message: 'Review not found or deleted.' });
+    if (!review) {
+      return res.status(404).json({ success: false, message: 'Review not found or deleted.' });
+    }
     res.status(200).json({ success: true, data: review });
-  } catch (err) { next(err); }
+  } catch (err) { 
+    next(err); 
+  }
 };
 
 /* ── POST /api/upload-code ──────────────────────────────────────── */
