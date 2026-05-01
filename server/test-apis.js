@@ -128,7 +128,7 @@ async function testGroq() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
+        model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
         max_tokens: 100,
         messages: [
           { role: 'system', content: 'You are a helpful assistant. Respond with just "OK".' },

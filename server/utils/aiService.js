@@ -101,7 +101,7 @@ const analyzeWithGroq = async (code, language) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL || 'llama-3.1-70b-versatile',
+        model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
         max_tokens: 1500,
         temperature: 0.3,
         messages: [
