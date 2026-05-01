@@ -163,13 +163,13 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
             Built with <RiHeartFill size={12} className="text-pink-500/70" /> by
-            <a href="https://github.com/aniketsingh" target="_blank" rel="noopener noreferrer"
+            <a href="https://github.com/Ani200418" target="_blank" rel="noopener noreferrer"
                className="font-semibold hover:text-purple-400 transition-colors" style={{ color: 'var(--text-secondary)' }}>
               Aniket Singh
             </a>
           </div>
           <div className="flex items-center gap-3">
-            <a href="https://github.com/aniketsingh" target="_blank" rel="noopener noreferrer"
+            <a href="https://github.com/Ani200418" target="_blank" rel="noopener noreferrer"
                className="hover:text-slate-400 transition-colors" style={{ color: 'var(--text-muted)' }}>
               <RiGithubFill size={16} />
             </a>

@@ -83,7 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Branding */}
           <div className="mt-3 pt-3 flex items-center justify-center gap-1.5" style={{ borderTop: '1px solid rgba(168,85,247,0.05)' }}>
             <span className="text-xs text-slate-700">by</span>
-            <a href="https://github.com/aniketsingh" target="_blank" rel="noopener noreferrer"
+            <a href="https://github.com/Ani200418" target="_blank" rel="noopener noreferrer"
                className="text-xs font-medium text-slate-600 hover:text-purple-400 transition-colors">Aniket Singh</a>
             <RiGithubFill size={12} className="text-slate-700" />
           </div>
@@ -109,7 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="px-6 py-4 text-center" style={{ borderTop: '1px solid rgba(168,85,247,0.05)' }}>
           <p className="text-xs text-slate-700 flex items-center justify-center gap-1.5">
             Built with <RiHeartFill size={11} className="text-red-500/60" /> by
-            <a href="https://github.com/aniketsingh" target="_blank" rel="noopener noreferrer"
+            <a href="https://github.com/Ani200418" target="_blank" rel="noopener noreferrer"
                className="font-semibold text-slate-600 hover:text-purple-400 transition-colors">Aniket Singh</a>
           </p>
         </div>
