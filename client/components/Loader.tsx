@@ -34,7 +34,7 @@ export default function Loader({ variant = 'spinner', text, size = 'md' }: Loade
 
         <h3 className="text-lg font-bold text-white mb-2">Analyzing your code…</h3>
         <p className="text-sm text-slate-500 max-w-xs mx-auto mb-6">
-          GPT-4 is scanning for bugs, optimizations, and quality issues. Usually 10–30 seconds.
+          AI is scanning for bugs, optimizations, and quality issues. Usually 10–30 seconds.
         </p>
 
         {/* Progress steps */}

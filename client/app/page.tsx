@@ -6,7 +6,7 @@ import {
 } from 'react-icons/ri';
 
 const features = [
-  { icon: <RiShieldCheckLine size={20} />, title: 'Bug Detection',    desc: 'GPT-4 finds logical bugs, null references, race conditions, and security vulnerabilities before they reach production.',           color: '#f87171', bg: 'rgba(239,68,68,0.10)' },
+  { icon: <RiShieldCheckLine size={20} />, title: 'Bug Detection',    desc: 'AI finds logical bugs, null references, race conditions, and security vulnerabilities before they reach production.',           color: '#f87171', bg: 'rgba(239,68,68,0.10)' },
   { icon: <RiLineChartLine  size={20} />, title: 'Optimization',      desc: 'Get actionable performance improvements with estimated impact on speed, memory, and maintainability.',                             color: '#fbbf24', bg: 'rgba(245,158,11,0.10)' },
   { icon: <RiCodeSSlashLine size={20} />, title: 'Code Explanation',   desc: 'Understand what any code does — explained in plain English, perfect for onboarding or code review.',                              color: '#c084fc', bg: 'rgba(168,85,247,0.10)' },
   { icon: <RiTestTubeLine   size={20} />, title: 'Test Generation',    desc: 'Automatically generate edge-case-aware test cases to improve coverage and catch regressions.',                                   color: '#f472b6', bg: 'rgba(236,72,153,0.10)' },
@@ -14,7 +14,7 @@ const features = [
 
 const stats = [
   { val: '7+',    label: 'Languages'     },
-  { val: 'GPT-4', label: 'Powered by'    },
+  { val: 'Groq',  label: 'Powered by'    },
   { val: '< 30s', label: 'Analysis time' },
   { val: '0–100', label: 'Quality score' },
 ];
@@ -51,7 +51,7 @@ export default function HomePage() {
       <section className="max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-8"
              style={{ background: 'rgba(168,85,247,0.10)', border: '1px solid rgba(192,132,252,0.25)', color: '#c084fc' }}>
-          <RiStarFill size={11} /> Powered by GPT-4o · Built by Aniket Singh
+          <RiStarFill size={11} /> Powered by Groq AI · Built by Aniket Singh
         </div>
 
         <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-[1.05]" style={{ color: 'var(--text-primary)' }}>
@@ -61,7 +61,7 @@ export default function HomePage() {
 
         <p className="text-lg max-w-2xl mx-auto mb-10 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
           Paste your code and receive instant feedback on bugs, performance, and quality —
-          powered by GPT-4. Ship better code, faster.
+          powered by Groq AI. Ship better code, faster.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center mb-16">

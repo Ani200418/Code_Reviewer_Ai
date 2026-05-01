@@ -6,7 +6,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'CodeReviewerAI — AI-Powered Code Analysis',
   description: 'Instantly analyze your code for bugs, optimizations, and quality scores. Built by Aniket Singh.',
-  keywords: ['code review', 'AI', 'bug detection', 'GPT-4', 'developer tool'],
+  keywords: ['code review', 'AI', 'bug detection', 'code analysis', 'developer tool'],
   authors: [{ name: 'Aniket Singh' }],
   openGraph: {
     title: 'CodeReviewerAI',
