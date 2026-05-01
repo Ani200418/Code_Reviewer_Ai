@@ -83,6 +83,7 @@ export default function ReviewPage() {
   const [code, setCode] = useState(SAMPLE.javascript);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [result, setResult] = useState<ReviewResult | null>(null);
   const [showShare, setShowShare] = useState(false);
 
@@ -134,6 +135,40 @@ export default function ReviewPage() {
       }
     } finally {
       setIsAnalyzing(false);
+    }
+  }, [tab, code, language, uploadedFile, targetLanguage]);
+
+  const handleConvert = useCallback(async () => {
+    if (!targetLanguage) { 
+      toast.error('Please select a target language'); 
+      return; 
+    }
+    if (tab === 'editor' && !code.trim()) { 
+      toast.error('Please enter some code'); 
+      return; 
+    }
+    if (tab === 'upload' && !uploadedFile) { 
+      toast.error('Please upload a file'); 
+      return; 
+    }
+
+    setIsConverting(true);
+    setResult(null);
+    try {
+      const res = tab === 'upload' && uploadedFile
+        ? await reviewService.uploadCodeFile(uploadedFile, targetLanguage)
+        : await reviewService.reviewCode(code, language, targetLanguage);
+      setResult(res);
+      toast.success('Code conversion complete!');
+      setTimeout(() => document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+    } catch (err: any) {
+      if (err.response?.status === 400 && err.response?.data?.data?.compilationError) {
+        setResult(err.response.data.data as any);
+      } else {
+        toast.error(extractErrorMessage(err));
+      }
+    } finally {
+      setIsConverting(false);
     }
   }, [tab, code, language, uploadedFile, targetLanguage]);
 
@@ -224,14 +259,14 @@ export default function ReviewPage() {
             />
           )}
 
-          {/* Submit */}
-          <div className="flex items-center justify-between pt-1">
+          {/* Submit Buttons */}
+          <div className="flex items-center justify-between pt-1 gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-slate-400">Convert to:</span>
               <select
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value as LanguageValue | '')}
-                disabled={isAnalyzing}
+                disabled={isAnalyzing || isConverting}
                 className="text-sm rounded-xl px-3 py-2 outline-none cursor-pointer transition-all"
                 style={{ background: 'rgba(17,13,30,0.95)', color: targetLanguage ? '#38bdf8' : 'var(--text-muted)', border: '1px solid rgba(192,132,252,0.14)' }}
               >
@@ -241,25 +276,41 @@ export default function ReviewPage() {
                 ))}
               </select>
             </div>
-            <button 
-              onClick={handleAnalyze} 
-              disabled={isAnalyzing} 
-              data-analyze-btn
-              className="btn-gradient px-8 py-3">
-              {isAnalyzing
-                ? <><div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" /> Analyzing…</>
-                : <><RiSparklingLine size={16} /> Analyze with AI</>
-              }
-            </button>
+            
+            <div className="flex items-center gap-2">
+              {/* Convert Button */}
+              <button 
+                onClick={handleConvert}
+                disabled={isAnalyzing || isConverting || !targetLanguage}
+                className="btn-secondary px-6 py-3 text-sm"
+                title="Convert code to selected language">
+                {isConverting
+                  ? <><div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" /> Converting…</>
+                  : <>🔄 Convert</>
+                }
+              </button>
+
+              {/* Analyze Button */}
+              <button 
+                onClick={handleAnalyze} 
+                disabled={isAnalyzing || isConverting} 
+                data-analyze-btn
+                className="btn-gradient px-8 py-3">
+                {isAnalyzing
+                  ? <><div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" /> Analyzing…</>
+                  : <><RiSparklingLine size={16} /> Analyze with AI</>
+                }
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Analyzing */}
-      {isAnalyzing && <Loader variant="analyzing" />}
+      {/* Analyzing/Converting */}
+      {(isAnalyzing || isConverting) && <Loader variant="analyzing" />}
 
       {/* Results or Error State */}
-      {result && !isAnalyzing && (
+      {result && !isAnalyzing && !isConverting && (
         <div id="results">
           {/* Check if this is an error response */}
           {(result as any)?.compilationStatus === 'Error' || (result as any)?.compilationError ? (
