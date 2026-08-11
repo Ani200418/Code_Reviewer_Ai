@@ -23,29 +23,12 @@ export default function LoginPage() {
   /* ── Google One-Tap init ──────────────────────────────────────────────── */
   const handleGoogleCredential = useCallback(
     async (response: { credential: string }) => {
-      // DEBUG: Log credential and state to help diagnose sign-in issues
-      // (This is harmless debug output; remove after debugging.)
-      try {
-        console.debug('[GSI] credential received:', response?.credential);
-      } catch (e) {
-        // ignore
-      }
-
       setIsGoogleLoading(true);
       try {
         await loginWithGoogle(response.credential);
-        // Log what was persisted so we can inspect in browser console
-        try {
-          console.debug('[GSI] document.cookie:', typeof document !== 'undefined' ? document.cookie : null);
-          console.debug('[GSI] localStorage acr_user:', typeof localStorage !== 'undefined' ? localStorage.getItem('acr_user') : null);
-        } catch (e) {
-          // ignore
-        }
-
         toast.success('Welcome back!');
         router.push('/dashboard');
       } catch (err) {
-        console.error('[GSI] loginWithGoogle failed:', err);
         toast.error(extractErrorMessage(err));
       } finally {
         setIsGoogleLoading(false);
